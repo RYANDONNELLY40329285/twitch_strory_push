@@ -1,7 +1,10 @@
 package com.ryan.socialbackend.controllers;
 
 import com.ryan.socialbackend.services.XService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.Map;
 
@@ -16,25 +19,41 @@ public class XAuthController {
     }
 
     @GetMapping("/login")
-    public Map<String,String> login() {
+    public Map<String, String> login() {
         return Map.of("url", xService.generateLoginUrl());
     }
 
     @GetMapping("/callback")
-    public Map<String,Object> callback(@RequestParam String code) {
-        return xService.getAccessToken(code);
+    public ResponseEntity<?> callback(@RequestParam String code) {
+        try {
+            Map<String, Object> token = xService.getAccessToken(code);
+            return ResponseEntity.ok(token);
+        } catch (HttpClientErrorException e) {
+            // avoid Whitelabel page – return JSON instead
+            return ResponseEntity.status(e.getStatusCode())
+                    .body(Map.of(
+                            "error", "twitter_token_error",
+                            "status", e.getStatusCode().value(),
+                            "body", e.getResponseBodyAsString()
+                    ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                            "error", "server_error",
+                            "message", e.getMessage()
+                    ));
+        }
+    }
+
+    @GetMapping("/status")
+    public Map<String, Object> status() {
+        return Map.of("connected", xService.getStoredToken() != null);
     }
 
     @PostMapping("/tweet")
-    public Map<String,Object> tweet(
-            @RequestHeader("Authorization") String bearer,
-            @RequestBody Map<String,String> body
-    ) {
-        String token = bearer.replace("Bearer ", "");
+    public Map<String, Object> tweet(@RequestBody Map<String, String> body) {
         String text = body.get("text");
-
-        String result = xService.postTweet(token, text);
-
+        String result = xService.postTweet(text);
         return Map.of("result", result);
     }
 }
