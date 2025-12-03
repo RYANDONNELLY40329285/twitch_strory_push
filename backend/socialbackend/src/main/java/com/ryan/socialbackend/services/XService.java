@@ -1,45 +1,85 @@
 package com.ryan.socialbackend.services;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.*;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Map;
 
 @Service
 public class XService {
 
-    // Store temporary access token in memory for now
-    private String accessToken;
+    @Value("${x.client-id}")
+    private String clientId;
 
-    public String buildAuthUrl() {
-        // TEMPORARY HARDCODED VALUES
-        String clientId = "YOUR_CLIENT_ID";
-        String redirectUri = "http://localhost:8080/auth/x/callback";
+    @Value("${x.client-secret}")
+    private String clientSecret;
 
+    @Value("${x.redirect-uri}")
+    private String redirectUri;
+
+    @Value("${x.scope}")
+    private String scope;
+
+    private final RestTemplate restTemplate = new RestTemplate();
+
+    public String generateLoginUrl() {
         return "https://twitter.com/i/oauth2/authorize"
                 + "?response_type=code"
                 + "&client_id=" + clientId
                 + "&redirect_uri=" + redirectUri
-                + "&scope=tweet.read%20tweet.write%20users.read%20offline.access"
-                + "&state=1234"
+                + "&scope=" + scope.replace(" ", "%20")
+                + "&state=12345"
                 + "&code_challenge=challenge"
                 + "&code_challenge_method=plain";
     }
 
-    public String exchangeCodeForToken(String code) {
-        // For now, return a fake access token
-        // Later we will call Twitter API here.
-        this.accessToken = "test-token-" + code;
-        return this.accessToken;
+    public Map getAccessToken(String code) {
+
+        String url = "https://api.twitter.com/2/oauth2/token";
+
+        // Basic Auth header (MUST BE BASE64)
+        String basic = clientId + ":" + clientSecret;
+        String base64Creds = Base64.getEncoder().encodeToString(
+                basic.getBytes(StandardCharsets.UTF_8)
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.set("Authorization", "Basic " + base64Creds);
+
+        String body =
+                "grant_type=authorization_code" +
+                "&code=" + code +
+                "&redirect_uri=" + redirectUri +
+                "&code_verifier=challenge";
+
+        HttpEntity<String> entity = new HttpEntity<>(body, headers);
+
+        ResponseEntity<Map> response =
+                restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
+
+        return response.getBody();
     }
 
-    public boolean isLinked() {
-        return this.accessToken != null;
-    }
+    public String postTweet(String bearerToken, String text) {
 
-    public String createTweet(String text) {
-        if (!isLinked()) {
-            return "ERROR: Not linked to X yet";
-        }
+        String url = "https://api.twitter.com/2/tweets";
 
-        // Later call Twitter API here
-        return "Tweet created: " + text;
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(bearerToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        Map<String, Object> json = Map.of("text", text);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(json, headers);
+
+        ResponseEntity<String> response =
+                restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+
+        return response.getBody();
     }
 }

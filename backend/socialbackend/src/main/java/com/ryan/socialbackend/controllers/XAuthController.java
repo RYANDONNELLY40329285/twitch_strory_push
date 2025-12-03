@@ -1,13 +1,12 @@
 package com.ryan.socialbackend.controllers;
 
 import com.ryan.socialbackend.services.XService;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
-import org.springframework.web.bind.annotation.*;
-
 @RestController
-@RequestMapping("/auth/x")
+@RequestMapping("/api/x/auth")
 public class XAuthController {
 
     private final XService xService;
@@ -16,25 +15,26 @@ public class XAuthController {
         this.xService = xService;
     }
 
-    @GetMapping("/start")
-    public String startAuth() {
-        return xService.buildAuthUrl();
+    @GetMapping("/login")
+    public Map<String,String> login() {
+        return Map.of("url", xService.generateLoginUrl());
     }
 
     @GetMapping("/callback")
-    public String callback(@RequestParam("code") String code) {
-        String token = xService.exchangeCodeForToken(code);
-        return "Linked to X! Token: " + token;
-    }
-
-    @GetMapping("/status")
-    public boolean status() {
-        return xService.isLinked();
+    public Map<String,Object> callback(@RequestParam String code) {
+        return xService.getAccessToken(code);
     }
 
     @PostMapping("/tweet")
-    public String tweet(@RequestBody Map<String, String> body) {
+    public Map<String,Object> tweet(
+            @RequestHeader("Authorization") String bearer,
+            @RequestBody Map<String,String> body
+    ) {
+        String token = bearer.replace("Bearer ", "");
         String text = body.get("text");
-        return xService.createTweet(text);
+
+        String result = xService.postTweet(token, text);
+
+        return Map.of("result", result);
     }
 }
