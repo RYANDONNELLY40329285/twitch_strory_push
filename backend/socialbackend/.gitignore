@@ -39,3 +39,4 @@ build/
 # Ignore Spring Boot config
 src/main/resources/application.properties
 src/main/resources/application.yml
+*.properties
