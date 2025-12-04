@@ -102,4 +102,12 @@ public class XService {
 
         return response.getBody();
     }
+
+
+public void clearToken() {
+    this.accessToken = null;
+}
+
+
+
 }

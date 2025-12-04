@@ -27,7 +27,7 @@ public class XAuthController {
     public ResponseEntity<?> callback(@RequestParam String code) {
         try {
             Map<String, Object> token = xService.getAccessToken(code);
-            return ResponseEntity.ok(token);
+           return ResponseEntity.ok("<html><body><script>window.close();</script>Login successful. You may close this window.</body></html>");
         } catch (HttpClientErrorException e) {
             // avoid Whitelabel page – return JSON instead
             return ResponseEntity.status(e.getStatusCode())
@@ -44,6 +44,12 @@ public class XAuthController {
                     ));
         }
     }
+
+@RequestMapping(value = "/logout", method = {RequestMethod.GET, RequestMethod.POST})
+public Map<String, Object> logout() {
+    xService.clearToken();
+    return Map.of("success", true);
+}
 
     @GetMapping("/status")
     public Map<String, Object> status() {
