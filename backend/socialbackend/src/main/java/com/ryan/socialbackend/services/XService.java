@@ -109,5 +109,32 @@ public void clearToken() {
 }
 
 
+public Map<String, Object> getUserProfile() {
+    if (accessToken == null) {
+        return Map.of("error", "Not authenticated");
+    }
+
+    String url = "https://api.twitter.com/2/users/me?user.fields=profile_image_url,name,username";
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setBearerAuth(accessToken);
+
+    HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+    ResponseEntity<Map> response =
+            restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+
+    Map data = (Map) response.getBody().get("data");
+
+    return Map.of(
+            "id", data.get("id"),
+            "name", data.get("name"),
+            "username", data.get("username"),
+            "profile_image_url", data.get("profile_image_url")
+    );
+}
+
+
+
 
 }

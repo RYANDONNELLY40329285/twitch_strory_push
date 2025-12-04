@@ -45,6 +45,22 @@ public class XAuthController {
         }
     }
 
+
+@GetMapping("/profile")
+public ResponseEntity<?> profile() {
+    try {
+        Map<String, Object> profile = xService.getUserProfile();
+        return ResponseEntity.ok(profile);
+    } catch (Exception e) {
+        return ResponseEntity.status(500).body(Map.of(
+                "error", "profile_fetch_failed",
+                "message", e.getMessage()
+        ));
+    }
+}
+
+
+
 @RequestMapping(value = "/logout", method = {RequestMethod.GET, RequestMethod.POST})
 public Map<String, Object> logout() {
     xService.clearToken();

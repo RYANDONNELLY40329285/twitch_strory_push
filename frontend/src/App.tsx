@@ -1,127 +1,166 @@
 import { useEffect, useState } from "react";
+import EmojiPicker from "emoji-picker-react";
+import AccountsModal from "./components/AccountsModal";
 
 export default function App() {
   const [connected, setConnected] = useState(false);
+  const [profile, setProfile] = useState<any>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
   const [tweet, setTweet] = useState("");
-  const [sending, setSending] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
 
   const MAX_CHARS = 280;
 
+  // ⭐ Popup state
+  const [popup, setPopup] = useState<null | { type: string; message: string }>(
+    null
+  );
+
+  // ---------------- REFRESH STATUS ----------------
+
   const refreshStatus = async () => {
-    try {
-      const res = await window.api.getAuthStatus();
-      setConnected(res.connected === true);
-    } catch (err) {
-      console.error(err);
+    const res = await window.api.getAuthStatus();
+    setConnected(res.connected === true);
+
+    if (res.connected) {
+      const p = await window.api.getProfile();
+      setProfile(p);
+    } else {
+      setProfile(null);
     }
   };
 
-  // Handle OAuth completion
   useEffect(() => {
-    window.api.onOAuthComplete(async () => {
-      console.log("OAuth complete → retrying status...");
-
-      // Retry backend for token readiness
-      for (let i = 0; i < 15; i++) {
-        const res = await window.api.getAuthStatus();
-        if (res.connected === true) {
-          setConnected(true);
-          return;
-        }
-        await new Promise((r) => setTimeout(r, 200));
-      }
-    });
-
     refreshStatus();
+
+    // ⭐ FIX: After OAuth, refresh + reopen the modal
+    window.api.onOAuthComplete(() => {
+      console.log("OAuth complete → refreshing status + reopening modal");
+      refreshStatus();
+      setModalOpen(true);
+    });
   }, []);
 
-  const handleLogin = async () => {
-    await window.api.startOAuth();
-  };
+  // ---------------- SEND TWEET ----------------
 
-  const handleLogout = async () => {
-    await window.api.logout();
-    refreshStatus();
-  };
+  const postTweet = async () => {
+    if (!tweet.length) return;
 
-  const sendTweet = async () => {
-    if (!tweet.trim()) return;
+    try {
+      const result = await window.api.postTweet(tweet);
 
-    setSending(true);
-    const result = await window.api.postTweet(tweet);
-    setSending(false);
-
-    if (result?.result) {
-      setTweet(""); // Clear tweet on success
+      // ❗ Detect failed tweet based on backend text response
+      if (result?.result?.startsWith("ERROR")) {
+        setPopup({
+          type: "error",
+          message: "Tweet failed: Not logged in.",
+        });
+      } else {
+        setPopup({
+          type: "success",
+          message: "Tweet sent successfully!",
+        });
+        setTweet("");
+      }
+    } catch (err) {
+      setPopup({
+        type: "error",
+        message: "Tweet failed to send.",
+      });
     }
+
+    // Hide popup after 2.5s
+    setTimeout(() => setPopup(null), 2500);
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <div className="max-w-xl mx-auto space-y-6">
+    <div className="p-8">
 
-        <h1 className="text-3xl font-bold text-center">X Desktop Client</h1>
+      {/* HEADER */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">X Desktop Client</h1>
 
-        {/* Connection Status Box (still visible at top) */}
-        <div
-          className={`p-4 rounded-lg text-center font-semibold ${
-            connected ? "bg-green-600" : "bg-red-600"
-          }`}
+        <button
+          onClick={() => setModalOpen(true)}
+          className="px-4 py-2 rounded-lg bg-[#9A1535] hover:bg-[#B01A40]"
         >
-          {connected ? "Connected to X" : "Not Connected"}
-        </div>
+          Accounts
+        </button>
+      </div>
 
-        {/* Login / Logout */}
-        <div className="flex justify-center gap-4">
-          {!connected && (
-            <button
-              onClick={handleLogin}
-              className="bg-blue-500 hover:bg-blue-600 px-5 py-2 rounded-lg font-semibold"
-            >
-              Connect to X
-            </button>
-          )}
+      {/* COMPOSE TWEET */}
+      <div className="mt-8">
+        <h2 className="text-xl font-semibold mb-2">Compose Tweet</h2>
 
-          {connected && (
-            <button
-              onClick={handleLogout}
-              className="bg-red-500 hover:bg-red-600 px-5 py-2 rounded-lg font-semibold"
-            >
-              Disconnect
-            </button>
-          )}
-        </div>
-
-        {/* Tweet Composer */}
-        <div className="bg-gray-800 p-5 rounded-lg">
-          <h2 className="text-xl font-semibold mb-3">Compose Tweet</h2>
-
+        <div className="relative">
           <textarea
-            className="w-full p-3 bg-gray-700 rounded-md text-white outline-none"
-            rows={5}
-            maxLength={MAX_CHARS}
-            placeholder="What's happening?"
             value={tweet}
             onChange={(e) => setTweet(e.target.value)}
+            maxLength={MAX_CHARS}
+            className="w-full p-4 rounded-lg bg-[#2a2b2f] outline-none resize-none"
+            rows={5}
+            placeholder="What's happening?"
           />
 
-          <div className="text-right text-sm text-gray-400 mt-1">
+          {/* Emoji Button */}
+          <button
+            onClick={() => setShowEmoji(!showEmoji)}
+            className="absolute bottom-3 right-3 text-2xl"
+          >
+            😊
+          </button>
+
+          {/* Emoji Picker */}
+          {showEmoji && (
+            <div className="absolute right-0 mt-2 z-50">
+              <EmojiPicker
+                theme="dark"
+                onEmojiClick={(e) => setTweet(tweet + e.emoji)}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Counter + Send */}
+        <div className="flex justify-between items-center mt-2">
+          <span className="text-gray-400">
             {tweet.length}/{MAX_CHARS}
-          </div>
+          </span>
 
           <button
-            disabled={sending}
-            onClick={sendTweet}
-            className={`mt-3 w-full py-2 rounded-lg font-semibold ${
-              sending
-                ? "bg-gray-600 cursor-not-allowed"
-                : "bg-blue-500 hover:bg-blue-600"
-            }`}
+            onClick={postTweet}
+            className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700"
           >
-            {sending ? "Sending..." : "Post Tweet"}
+            Post Tweet
           </button>
         </div>
       </div>
+
+      {/* ACCOUNTS MODAL */}
+      {modalOpen && (
+        <AccountsModal
+          connected={connected}
+          profile={profile}
+          refreshStatus={refreshStatus}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
+
+      {/* ⭐ POPUP SYSTEM */}
+      {popup && (
+        <div
+          className={`fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg text-white
+            ${
+              popup.type === "success"
+                ? "bg-green-600"
+                : "bg-red-600"
+            }
+          `}
+        >
+          {popup.message}
+        </div>
+      )}
     </div>
   );
 }
