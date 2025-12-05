@@ -7,9 +7,6 @@ const electron_1 = require("electron");
 const path_1 = __importDefault(require("path"));
 const BACKEND_URL = "http://localhost:8080";
 let mainWindow = null;
-// -----------------------------------------------------
-// Create main window
-// -----------------------------------------------------
 function createWindow() {
     mainWindow = new electron_1.BrowserWindow({
         width: 1100,
@@ -25,16 +22,10 @@ function createWindow() {
     mainWindow.on("closed", () => (mainWindow = null));
 }
 electron_1.app.whenReady().then(createWindow);
-// -----------------------------------------------------
-// Notify renderer OAuth is completed
-// -----------------------------------------------------
 function notifyOAuthComplete() {
     console.log("Sending oauth-complete to renderer");
     mainWindow?.webContents.send("oauth-complete");
 }
-// -----------------------------------------------------
-// START OAUTH POPUP
-// -----------------------------------------------------
 electron_1.ipcMain.handle("oauth-start", async () => {
     const res = await fetch(`${BACKEND_URL}/api/x/auth/login`);
     const data = await res.json();
@@ -51,9 +42,6 @@ electron_1.ipcMain.handle("oauth-start", async () => {
         },
     });
     popup.loadURL(data.url);
-    // -----------------------------------------------------
-    // POLL DOM UNTIL USER CELL APPEARS
-    // -----------------------------------------------------
     const interval = setInterval(async () => {
         try {
             const result = await popup.webContents.executeJavaScript(`
@@ -63,7 +51,6 @@ electron_1.ipcMain.handle("oauth-start", async () => {
 
           const avatarUrl = img.src;
 
-          // Find container holding name + username
           let cell = img.closest("[data-testid='UserCell']");
           if (!cell) cell = img.parentElement?.parentElement;
           if (!cell) return { avatarUrl };
@@ -72,11 +59,9 @@ electron_1.ipcMain.handle("oauth-start", async () => {
             .map(n => n.innerText)
             .filter(Boolean);
 
-          // Find username line
           const usernameLine = textNodes.find(t => t.startsWith("@"));
           const username = usernameLine ? usernameLine.replace("@", "") : null;
 
-          // Correct display name -> line directly above @username
           let name = null;
           if (usernameLine) {
             const idx = textNodes.indexOf(usernameLine);
@@ -88,7 +73,6 @@ electron_1.ipcMain.handle("oauth-start", async () => {
       `);
             if (!result)
                 return;
-            console.log("🔥 DOM SCRAPE RESULT:", result);
             if (result.username && result.name) {
                 clearInterval(interval);
                 const profile = {
@@ -100,16 +84,10 @@ electron_1.ipcMain.handle("oauth-start", async () => {
                 mainWindow?.webContents.send("auto-profile", profile);
             }
         }
-        catch (err) {
-            console.log("DOM parse error:", err);
-        }
+        catch { }
     }, 400);
-    // -----------------------------------------------------
-    // When popup redirects to backend
-    // -----------------------------------------------------
     popup.webContents.on("will-redirect", (_, url) => {
         if (url.startsWith(`${BACKEND_URL}/api/x/auth/callback`)) {
-            console.log("Callback redirect detected.");
             clearInterval(interval);
             popup.close();
             notifyOAuthComplete();
@@ -123,29 +101,24 @@ electron_1.ipcMain.handle("oauth-start", async () => {
             if (status.connected)
                 notifyOAuthComplete();
         }
-        catch (err) {
-            console.log("Error checking status:", err);
-        }
+        catch { }
     });
 });
-// -----------------------------------------------------
-// BACKEND API PASSTHROUGH
-// -----------------------------------------------------
 electron_1.ipcMain.handle("auth-status", async () => {
-    return await fetch(`${BACKEND_URL}/api/x/auth/status`).then(r => r.json());
+    return fetch(`${BACKEND_URL}/api/x/auth/status`).then((r) => r.json());
 });
 electron_1.ipcMain.handle("profile-get", async () => {
-    return await fetch(`${BACKEND_URL}/api/x/auth/profile`).then(r => r.json());
+    return fetch(`${BACKEND_URL}/api/x/auth/profile`).then((r) => r.json());
 });
 electron_1.ipcMain.handle("tweet-post", async (_, text) => {
-    return await fetch(`${BACKEND_URL}/api/x/auth/tweet`, {
+    return fetch(`${BACKEND_URL}/api/x/auth/tweet`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
-    }).then(r => r.json());
+    }).then((r) => r.json());
 });
 electron_1.ipcMain.handle("oauth-logout", async () => {
-    return await fetch(`${BACKEND_URL}/api/x/auth/logout`, {
+    return fetch(`${BACKEND_URL}/api/x/auth/logout`, {
         method: "POST",
-    }).then(r => r.json());
+    }).then((r) => r.json());
 });

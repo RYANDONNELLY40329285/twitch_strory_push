@@ -2,32 +2,17 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 electron_1.contextBridge.exposeInMainWorld("api", {
-    // OAuth start
-    startOAuth: async () => {
-        return await electron_1.ipcRenderer.invoke("oauth-start");
-    },
-    // Logout
-    logout: async () => {
-        return await electron_1.ipcRenderer.invoke("oauth-logout");
-    },
-    // Backend status
-    getAuthStatus: async () => {
-        return await electron_1.ipcRenderer.invoke("auth-status");
-    },
-    // Profile
-    getProfile: async () => {
-        return await electron_1.ipcRenderer.invoke("profile-get");
-    },
-    // Tweet posting
-    postTweet: async (text) => {
-        return await electron_1.ipcRenderer.invoke("tweet-post", text);
-    },
-    // OAuth finished
+    startOAuth: () => electron_1.ipcRenderer.invoke("oauth-start"),
+    getAuthStatus: () => electron_1.ipcRenderer.invoke("auth-status"),
+    getProfile: () => electron_1.ipcRenderer.invoke("profile-get"),
+    postTweet: (text) => electron_1.ipcRenderer.invoke("tweet-post", text),
+    logout: () => electron_1.ipcRenderer.invoke("oauth-logout"),
     onOAuthComplete: (cb) => {
         electron_1.ipcRenderer.on("oauth-complete", () => cb());
     },
-    // Auto-profile from popup
     onAutoProfile: (cb) => {
-        electron_1.ipcRenderer.on("auto-profile", (_event, profile) => cb(profile));
+        electron_1.ipcRenderer.on("auto-profile", (_, profile) => {
+            cb(profile);
+        });
     },
 });

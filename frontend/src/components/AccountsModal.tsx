@@ -12,9 +12,10 @@ export default function AccountsModal({
   const [pretweet, setPretweet] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
 
-  const profilePic = profile?.profile_image_url
-    ? profile.profile_image_url.replace("_normal", "_400x400")
-    : "https://abs.twimg.com/sticky/default_profile_images/default_profile_400x400.png";
+  const profilePic =
+    connected && profile?.profile_image_url
+      ? profile.profile_image_url.replace("_normal", "_400x400")
+      : "https://abs.twimg.com/sticky/default_profile_images/default_profile_400x400.png";
 
   const connectX = async () => {
     await window.api.startOAuth();
@@ -23,17 +24,17 @@ export default function AccountsModal({
   const disconnectX = async () => {
     await window.api.logout();
     localStorage.removeItem("twitter_profile");
-    refreshStatus();
+    await refreshStatus();
   };
 
   return (
     <div className="fixed inset-0 flex items-center justify-center modal-backdrop z-50">
       <div className="crimson-card w-[800px] h-[520px] rounded-2xl shadow-xl flex overflow-hidden">
 
-        {/* LEFT PANEL */}
+        {/* LEFT SIDE */}
         <div className="w-1/3 p-6 border-r border-white/10">
-          <div className="flex flex-col items-center">
 
+          <div className="flex flex-col items-center">
             <img
               src={profilePic}
               className="w-28 h-28 rounded-full border-4 border-black shadow-lg"
@@ -71,8 +72,10 @@ export default function AccountsModal({
           </div>
         </div>
 
-        {/* RIGHT PANEL */}
+        {/* RIGHT SIDE */}
         <div className="w-2/3 p-6">
+
+          {/* Tabs */}
           <div className="flex gap-6 mb-4 border-b border-white/10 pb-3">
             <button
               onClick={() => setActiveTab("pretweet")}

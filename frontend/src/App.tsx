@@ -12,59 +12,58 @@ export default function App() {
 
   const MAX_CHARS = 280;
 
-  // ⭐ ORIGINAL POPUP
+  // ORIGINAL POPUP — unchanged
   const [popup, setPopup] = useState<null | { type: string; message: string }>(
     null
   );
 
-  // ---------------- REFRESH STATUS ----------------
-  const refreshStatus = async () => {
-    const res = await window.api.getAuthStatus();
-    setConnected(res.connected === true);
-
-    if (res.connected) {
-      const p = await window.api.getProfile();
-      if (p?.username) {
-        setProfile(p);
-        localStorage.setItem("twitter_profile", JSON.stringify(p));
-      }
-    } else {
-      setProfile(null);
-      localStorage.removeItem("twitter_profile");
+  // Load cached profile instantly
+  const loadCachedProfile = () => {
+    const cached = localStorage.getItem("twitter_profile");
+    if (cached) {
+      try {
+        setProfile(JSON.parse(cached));
+      } catch {}
     }
   };
 
-  // Load cached profile instantly (safe)
-  const loadCached = () => {
-    const c = localStorage.getItem("twitter_profile");
-    if (c) setProfile(JSON.parse(c));
+  // Refresh backend state
+  const refreshStatus = async () => {
+    const status = await window.api.getAuthStatus();
+    setConnected(status.connected);
+
+    if (status.connected) {
+      const p = await window.api.getProfile();
+      if (p?.username) {
+        localStorage.setItem("twitter_profile", JSON.stringify(p));
+        setProfile(p);
+      }
+    }
   };
 
   useEffect(() => {
-    loadCached();
+    loadCachedProfile();
     refreshStatus();
 
-    // ⭐ When OAuth finishes
-    window.api.onOAuthComplete(() => {
-      console.log("OAuth complete → refreshing status + reopening modal");
-      refreshStatus();
+    // When backend confirms OAuth completed
+    window.api.onOAuthComplete(async () => {
+      console.log("OAuth complete → refreshing");
+      await refreshStatus();
       setModalOpen(true);
     });
 
-    // ⭐ One-line fix: Ignore auto-profile until the user is authenticated
+    // Auto-profile FROM SCRAPER (always allowed!)
     window.api.onAutoProfile((p) => {
-      if (!connected) return; // ← FIX
-
-      console.log("Auto-profile received:", p);
+      console.log("AUTO PROFILE RECEIVED:", p);
 
       if (p?.username) {
         localStorage.setItem("twitter_profile", JSON.stringify(p));
         setProfile(p);
       }
     });
-  }, [connected]);
+  }, []);
 
-  // ---------------- SEND TWEET ----------------
+  // POST TWEET (popup unchanged)
   const postTweet = async () => {
     if (!tweet.length) return;
 
@@ -83,7 +82,7 @@ export default function App() {
         });
         setTweet("");
       }
-    } catch (err) {
+    } catch {
       setPopup({
         type: "error",
         message: "Tweet failed to send.",
@@ -117,12 +116,11 @@ export default function App() {
             value={tweet}
             onChange={(e) => setTweet(e.target.value)}
             maxLength={MAX_CHARS}
+            placeholder="What's happening?"
             className="w-full p-4 rounded-lg bg-[#2a2b2f] outline-none resize-none"
             rows={5}
-            placeholder="What's happening?"
           />
 
-          {/* Emoji Button */}
           <button
             onClick={() => setShowEmoji(!showEmoji)}
             className="absolute bottom-3 right-3 text-2xl"
@@ -130,7 +128,6 @@ export default function App() {
             😊
           </button>
 
-          {/* Emoji Picker */}
           {showEmoji && (
             <div className="absolute right-0 mt-2 z-50">
               <EmojiPicker
@@ -141,7 +138,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Counter + Send */}
         <div className="flex justify-between items-center mt-2">
           <span className="text-gray-400">
             {tweet.length}/{MAX_CHARS}
@@ -156,7 +152,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ACCOUNTS MODAL */}
+      {/* MODAL */}
       {modalOpen && (
         <AccountsModal
           connected={connected}
@@ -166,7 +162,7 @@ export default function App() {
         />
       )}
 
-      {/* ⭐ ORIGINAL POPUP */}
+      {/* POPUP */}
       {popup && (
         <div
           className={`fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg text-white
