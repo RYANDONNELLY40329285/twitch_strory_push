@@ -1,5 +1,7 @@
 package com.ryan.socialbackend.services;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -13,7 +15,7 @@ import java.util.Map;
 @Service
 public class XService {
 
-    // stored user access token (in-memory for now)
+    // Only the access token can be stored on Free Tier
     private String accessToken;
 
     @Value("${x.client-id}")
@@ -34,7 +36,9 @@ public class XService {
         return accessToken;
     }
 
-    // 1) build the login URL
+    // ---------------------------------------------------
+    // 1) Build the login URL
+    // ---------------------------------------------------
     public String generateLoginUrl() {
         return "https://twitter.com/i/oauth2/authorize"
                 + "?response_type=code"
@@ -42,12 +46,15 @@ public class XService {
                 + "&redirect_uri=" + redirectUri
                 + "&scope=" + scope.replace(" ", "%20")
                 + "&state=12345"
+                + "&include_granted_scopes=true"
                 + "&code_challenge=challenge"
                 + "&code_challenge_method=plain";
     }
 
-    // 2) exchange code for token and store it
-    public Map<String, Object> getAccessToken(String code) throws HttpClientErrorException {
+    // ---------------------------------------------------
+    // 2) Exchange authorization code for access token
+    // ---------------------------------------------------
+    public Map<String, Object> getAccessToken(String code) throws HttpClientErrorException, JsonProcessingException {
 
         String url = "https://api.twitter.com/2/oauth2/token";
 
@@ -62,18 +69,23 @@ public class XService {
 
         String body =
                 "grant_type=authorization_code" +
-                        "&code=" + code +
-                        "&redirect_uri=" + redirectUri +
-                        "&code_verifier=challenge";
+                "&code=" + code +
+                "&redirect_uri=" + redirectUri +
+                "&include_granted_scopes=true" +
+                "&code_verifier=challenge";
 
         HttpEntity<String> entity = new HttpEntity<>(body, headers);
 
         ResponseEntity<Map> response =
                 restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
 
-        @SuppressWarnings("unchecked")
         Map<String, Object> tokenResponse = response.getBody();
 
+        // Debug output so you can see exactly what Twitter returns
+        System.out.println("TOKEN RESPONSE:");
+        System.out.println(new ObjectMapper().writeValueAsString(tokenResponse));
+
+        // Store the access token ONLY — Free Tier returns no user identity
         if (tokenResponse != null && tokenResponse.containsKey("access_token")) {
             this.accessToken = tokenResponse.get("access_token").toString();
         }
@@ -81,7 +93,9 @@ public class XService {
         return tokenResponse;
     }
 
-    // 3) post a tweet using the stored token
+    // ---------------------------------------------------
+    // 3) Post Tweet
+    // ---------------------------------------------------
     public String postTweet(String text) {
 
         if (accessToken == null) {
@@ -103,38 +117,29 @@ public class XService {
         return response.getBody();
     }
 
-
-public void clearToken() {
-    this.accessToken = null;
-}
-
-
-public Map<String, Object> getUserProfile() {
-    if (accessToken == null) {
-        return Map.of("error", "Not authenticated");
+    // ---------------------------------------------------
+    // 4) Clear
+    // ---------------------------------------------------
+    public void clearToken() {
+        this.accessToken = null;
     }
 
-    String url = "https://api.twitter.com/2/users/me?user.fields=profile_image_url,name,username";
+    // ---------------------------------------------------
+    // 5) Profile (Free Tier cannot return identity)
+    // ---------------------------------------------------
+    public Map<String, Object> getUserProfile() {
 
-    HttpHeaders headers = new HttpHeaders();
-    headers.setBearerAuth(accessToken);
+        if (accessToken == null) {
+            return Map.of(
+                    "connected", false,
+                    "error", "Not authenticated"
+            );
+        }
 
-    HttpEntity<Void> entity = new HttpEntity<>(headers);
-
-    ResponseEntity<Map> response =
-            restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
-
-    Map data = (Map) response.getBody().get("data");
-
-    return Map.of(
-            "id", data.get("id"),
-            "name", data.get("name"),
-            "username", data.get("username"),
-            "profile_image_url", data.get("profile_image_url")
-    );
-}
-
-
-
-
+        // Free Tier does NOT provide username, name, or profile image
+        return Map.of(
+                "connected", true,
+                "message", "Authenticated with X. User identity is not available on Free Tier."
+        );
+    }
 }

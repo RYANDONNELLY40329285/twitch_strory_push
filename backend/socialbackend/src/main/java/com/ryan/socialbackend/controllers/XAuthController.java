@@ -26,16 +26,20 @@ public class XAuthController {
     @GetMapping("/callback")
     public ResponseEntity<?> callback(@RequestParam String code) {
         try {
-            Map<String, Object> token = xService.getAccessToken(code);
-           return ResponseEntity.ok("<html><body><script>window.close();</script>Login successful. You may close this window.</body></html>");
+            xService.getAccessToken(code);
+
+            return ResponseEntity.ok(
+                    "<html><body><script>window.close();</script>Login successful. You may close this window.</body></html>"
+            );
+
         } catch (HttpClientErrorException e) {
-            // avoid Whitelabel page – return JSON instead
             return ResponseEntity.status(e.getStatusCode())
                     .body(Map.of(
                             "error", "twitter_token_error",
                             "status", e.getStatusCode().value(),
                             "body", e.getResponseBodyAsString()
                     ));
+
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
@@ -45,37 +49,25 @@ public class XAuthController {
         }
     }
 
-
-@GetMapping("/profile")
-public ResponseEntity<?> profile() {
-    try {
-        Map<String, Object> profile = xService.getUserProfile();
-        return ResponseEntity.ok(profile);
-    } catch (Exception e) {
-        return ResponseEntity.status(500).body(Map.of(
-                "error", "profile_fetch_failed",
-                "message", e.getMessage()
-        ));
-    }
-}
-
-
-
-@RequestMapping(value = "/logout", method = {RequestMethod.GET, RequestMethod.POST})
-public Map<String, Object> logout() {
-    xService.clearToken();
-    return Map.of("success", true);
-}
-
-    @GetMapping("/status")
-    public Map<String, Object> status() {
-        return Map.of("connected", xService.getStoredToken() != null);
+    @GetMapping("/profile")
+    public Map<String, Object> profile() {
+        return xService.getUserProfile();
     }
 
     @PostMapping("/tweet")
     public Map<String, Object> tweet(@RequestBody Map<String, String> body) {
         String text = body.get("text");
-        String result = xService.postTweet(text);
-        return Map.of("result", result);
+        return Map.of("result", xService.postTweet(text));
+    }
+
+    @RequestMapping(value = "/logout", method = {RequestMethod.GET, RequestMethod.POST})
+    public Map<String, Object> logout() {
+        xService.clearToken();
+        return Map.of("success", true);
+    }
+
+    @GetMapping("/status")
+    public Map<String, Object> status() {
+        return Map.of("connected", xService.getStoredToken() != null);
     }
 }

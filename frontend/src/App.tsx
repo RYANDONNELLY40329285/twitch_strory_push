@@ -12,45 +12,65 @@ export default function App() {
 
   const MAX_CHARS = 280;
 
-  // ⭐ Popup state
+  // ⭐ ORIGINAL POPUP
   const [popup, setPopup] = useState<null | { type: string; message: string }>(
     null
   );
 
   // ---------------- REFRESH STATUS ----------------
-
   const refreshStatus = async () => {
     const res = await window.api.getAuthStatus();
     setConnected(res.connected === true);
 
     if (res.connected) {
       const p = await window.api.getProfile();
-      setProfile(p);
+      if (p?.username) {
+        setProfile(p);
+        localStorage.setItem("twitter_profile", JSON.stringify(p));
+      }
     } else {
       setProfile(null);
+      localStorage.removeItem("twitter_profile");
     }
   };
 
+  // Load cached profile instantly (safe)
+  const loadCached = () => {
+    const c = localStorage.getItem("twitter_profile");
+    if (c) setProfile(JSON.parse(c));
+  };
+
   useEffect(() => {
+    loadCached();
     refreshStatus();
 
-    // ⭐ FIX: After OAuth, refresh + reopen the modal
+    // ⭐ When OAuth finishes
     window.api.onOAuthComplete(() => {
       console.log("OAuth complete → refreshing status + reopening modal");
       refreshStatus();
       setModalOpen(true);
     });
-  }, []);
+
+    // ⭐ One-line fix: Ignore auto-profile until the user is authenticated
+    window.api.onAutoProfile((p) => {
+      if (!connected) return; // ← FIX
+
+      console.log("Auto-profile received:", p);
+
+      if (p?.username) {
+        localStorage.setItem("twitter_profile", JSON.stringify(p));
+        setProfile(p);
+      }
+    });
+  }, [connected]);
 
   // ---------------- SEND TWEET ----------------
-
   const postTweet = async () => {
     if (!tweet.length) return;
 
     try {
       const result = await window.api.postTweet(tweet);
 
-      // ❗ Detect failed tweet based on backend text response
       if (result?.result?.startsWith("ERROR")) {
         setPopup({
           type: "error",
@@ -70,7 +90,6 @@ export default function App() {
       });
     }
 
-    // Hide popup after 2.5s
     setTimeout(() => setPopup(null), 2500);
   };
 
@@ -147,15 +166,11 @@ export default function App() {
         />
       )}
 
-      {/* ⭐ POPUP SYSTEM */}
+      {/* ⭐ ORIGINAL POPUP */}
       {popup && (
         <div
           className={`fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg text-white
-            ${
-              popup.type === "success"
-                ? "bg-green-600"
-                : "bg-red-600"
-            }
+            ${popup.type === "success" ? "bg-green-600" : "bg-red-600"}
           `}
         >
           {popup.message}

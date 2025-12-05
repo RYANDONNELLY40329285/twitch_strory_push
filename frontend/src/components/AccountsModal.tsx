@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import EmojiPicker from "emoji-picker-react";
 
 export default function AccountsModal({
@@ -12,18 +12,9 @@ export default function AccountsModal({
   const [pretweet, setPretweet] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
 
-  // ⭐ FIX — convert Twitter profile pic to HD
   const profilePic = profile?.profile_image_url
     ? profile.profile_image_url.replace("_normal", "_400x400")
     : "https://abs.twimg.com/sticky/default_profile_images/default_profile_400x400.png";
-
-  // LIVE UPDATE inside modal when OAuth completes
-  useEffect(() => {
-    window.api.onOAuthComplete(() => {
-      console.log("Modal received OAuth complete → refreshing");
-      refreshStatus();
-    });
-  }, []);
 
   const connectX = async () => {
     await window.api.startOAuth();
@@ -31,6 +22,7 @@ export default function AccountsModal({
 
   const disconnectX = async () => {
     await window.api.logout();
+    localStorage.removeItem("twitter_profile");
     refreshStatus();
   };
 
@@ -42,33 +34,29 @@ export default function AccountsModal({
         <div className="w-1/3 p-6 border-r border-white/10">
           <div className="flex flex-col items-center">
 
-            {/* ⭐ HD Profile Picture */}
             <img
               src={profilePic}
               className="w-28 h-28 rounded-full border-4 border-black shadow-lg"
-              draggable={false}
             />
 
             <h2 className="mt-4 text-xl font-bold">
-              {profile?.name || "Not Connected"}
+              {connected ? profile?.name : "Not Connected"}
             </h2>
 
             <p className="text-gray-300 text-sm">
-              {connected ? profile?.username : "X account not linked"}
+              {connected ? "@" + profile?.username : "X account not linked"}
             </p>
           </div>
 
           <div className="mt-6 flex flex-col gap-3">
-            {!connected && (
+            {!connected ? (
               <button
                 onClick={connectX}
                 className="bg-blue-600 hover:bg-blue-700 py-2 rounded"
               >
                 Connect X
               </button>
-            )}
-
-            {connected && (
+            ) : (
               <button
                 onClick={disconnectX}
                 className="bg-red-600 hover:bg-red-700 py-2 rounded"
@@ -77,7 +65,7 @@ export default function AccountsModal({
               </button>
             )}
 
-            <button className="bg-gray-700 py-2 rounded opacity-40 cursor-not-allowed">
+            <button className="bg-gray-700 py-2 rounded opacity-40">
               Connect Twitch (Coming Soon)
             </button>
           </div>
@@ -88,21 +76,21 @@ export default function AccountsModal({
           <div className="flex gap-6 mb-4 border-b border-white/10 pb-3">
             <button
               onClick={() => setActiveTab("pretweet")}
-              className={activeTab === "pretweet" ? "font-bold text-white" : "text-gray-300"}
+              className={activeTab === "pretweet" ? "font-bold" : ""}
             >
               Pre-Tweet
             </button>
 
             <button
               onClick={() => setActiveTab("activity")}
-              className={activeTab === "activity" ? "font-bold text-white" : "text-gray-300"}
+              className={activeTab === "activity" ? "font-bold" : ""}
             >
               Activity
             </button>
 
             <button
               onClick={() => setActiveTab("settings")}
-              className={activeTab === "settings" ? "font-bold text-white" : "text-gray-300"}
+              className={activeTab === "settings" ? "font-bold" : ""}
             >
               Settings
             </button>
@@ -156,7 +144,6 @@ export default function AccountsModal({
         >
           ✕
         </button>
-
       </div>
     </div>
   );
