@@ -28,11 +28,42 @@ function notifyOAuthComplete() {
   mainWindow?.webContents.send("oauth-complete");
 }
 
+// -----------------------------------------------
+//  Smooth Fade-Out Close (prevents flicker)
+// -----------------------------------------------
+function smoothClose(win: BrowserWindow) {
+  if (win.isDestroyed()) return;
+
+  console.log("Closing popup smoothly…");
+
+  // BLOCK ALL NAVIGATION instantly (fixes flicker)
+  win.webContents.on("will-navigate", (e) => e.preventDefault());
+  win.webContents.on("will-redirect", (e) => e.preventDefault());
+  win.webContents.on("did-start-navigation", (e) => e.preventDefault());
+
+  let opacity = 1;
+  const fade = setInterval(() => {
+    opacity -= 0.1;
+
+    if (opacity <= 0) {
+      clearInterval(fade);
+      if (!win.isDestroyed()) win.destroy();
+    } else {
+      if (!win.isDestroyed()) win.setOpacity(opacity);
+    }
+  }, 15);
+}
+
+// -----------------------------------------------
+// START OAUTH POPUP
+// -----------------------------------------------
 ipcMain.handle("oauth-start", async () => {
   const res = await fetch(`${BACKEND_URL}/api/x/auth/login`);
   const data = await res.json();
 
   if (!data.url) throw new Error("Backend missing OAuth URL");
+
+  let closing = false;
 
   const popup = new BrowserWindow({
     width: 600,
@@ -45,8 +76,12 @@ ipcMain.handle("oauth-start", async () => {
     },
   });
 
+  popup.setOpacity(1);
   popup.loadURL(data.url);
 
+  // -------------------------------------------
+  // DOM SCRAPING LOOP
+  // -------------------------------------------
   const interval = setInterval(async () => {
     try {
       const result = await popup.webContents.executeJavaScript(`
@@ -55,7 +90,6 @@ ipcMain.handle("oauth-start", async () => {
           if (!img) return null;
 
           const avatarUrl = img.src;
-
           let cell = img.closest("[data-testid='UserCell']");
           if (!cell) cell = img.parentElement?.parentElement;
           if (!cell) return { avatarUrl };
@@ -94,14 +128,37 @@ ipcMain.handle("oauth-start", async () => {
     } catch {}
   }, 400);
 
+  // -------------------------------------------
+  // HANDLE REDIRECTS
+  // -------------------------------------------
   popup.webContents.on("will-redirect", (_, url) => {
-    if (url.startsWith(`${BACKEND_URL}/api/x/auth/callback`)) {
+
+    // 🔥 User pressed CANCEL
+    if (url.includes("error=access_denied") || url.endsWith("/oauth2/authorize")) {
+      console.log("❌ User cancelled OAuth");
       clearInterval(interval);
-      popup.close();
+      if (!closing) {
+        closing = true;
+        smoothClose(popup);
+      }
+      return;
+    }
+
+    // ✔ OAuth completed
+    if (url.startsWith(`${BACKEND_URL}/api/x/auth/callback`)) {
+      console.log("OAuth callback detected");
+      clearInterval(interval);
+      if (!closing) {
+        closing = true;
+        smoothClose(popup);
+      }
       notifyOAuthComplete();
     }
   });
 
+  // -------------------------------------------
+  // WINDOW MANUALLY CLOSED (X button)
+  // -------------------------------------------
   popup.on("closed", async () => {
     clearInterval(interval);
 
@@ -113,6 +170,9 @@ ipcMain.handle("oauth-start", async () => {
   });
 });
 
+// -----------------------------------------------
+// BACKEND API PASSTHROUGH
+// -----------------------------------------------
 ipcMain.handle("auth-status", async () => {
   return fetch(`${BACKEND_URL}/api/x/auth/status`).then((r) => r.json());
 });
