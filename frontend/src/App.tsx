@@ -1,69 +1,103 @@
+// =======================
+// App.tsx
+// =======================
+
 import { useEffect, useState } from "react";
 import EmojiPicker from "emoji-picker-react";
 import AccountsModal from "./components/AccountsModal";
 
 export default function App() {
+  // TWITTER / X
   const [connected, setConnected] = useState(false);
   const [profile, setProfile] = useState<any>(null);
+
+  // TWITCH
+  const [twitchConnected, setTwitchConnected] = useState(false);
+  const [twitchProfile, setTwitchProfile] = useState<any>(null);
+
   const [modalOpen, setModalOpen] = useState(false);
 
+  // Tweet composer
   const [tweet, setTweet] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
 
   const MAX_CHARS = 280;
 
-  // ORIGINAL POPUP — unchanged
   const [popup, setPopup] = useState<null | { type: string; message: string }>(
     null
   );
 
-  // Load cached profile instantly
-  const loadCachedProfile = () => {
-    const cached = localStorage.getItem("twitter_profile");
-    if (cached) {
-      try {
-        setProfile(JSON.parse(cached));
-      } catch {}
-    }
+  // ------------------------------------------------
+  // Load cached profiles instantly
+  // ------------------------------------------------
+  const loadCache = () => {
+    const tw = localStorage.getItem("twitter_profile");
+    if (tw) setProfile(JSON.parse(tw));
+
+    const t = localStorage.getItem("twitch_profile");
+    if (t) setTwitchProfile(JSON.parse(t));
   };
 
-  // Refresh backend state
+  // ------------------------------------------------
+  // Refresh both X + Twitch state
+  // ------------------------------------------------
   const refreshStatus = async () => {
+    // TWITTER
     const status = await window.api.getAuthStatus();
     setConnected(status.connected);
 
     if (status.connected) {
       const p = await window.api.getProfile();
       if (p?.username) {
-        localStorage.setItem("twitter_profile", JSON.stringify(p));
         setProfile(p);
+        localStorage.setItem("twitter_profile", JSON.stringify(p));
+      }
+    }
+
+    // TWITCH
+    const tStatus = await window.api.getTwitchAuthStatus();
+    setTwitchConnected(tStatus.connected);
+
+    if (tStatus.connected) {
+      const tp = await window.api.getTwitchProfile();
+      if (tp) {
+        setTwitchProfile(tp);
+        localStorage.setItem("twitch_profile", JSON.stringify(tp));
       }
     }
   };
 
+  // ------------------------------------------------
+  // Startup + event listeners
+  // ------------------------------------------------
   useEffect(() => {
-    loadCachedProfile();
+    loadCache();
     refreshStatus();
 
-    // When backend confirms OAuth completed
+    // Twitter OAuth complete
     window.api.onOAuthComplete(async () => {
-      console.log("OAuth complete → refreshing");
       await refreshStatus();
       setModalOpen(true);
     });
 
-    // Auto-profile FROM SCRAPER (always allowed!)
-    window.api.onAutoProfile((p) => {
-      console.log("AUTO PROFILE RECEIVED:", p);
+    // Twitch OAuth complete
+    window.api.onTwitchOAuthComplete(async () => {
+      await refreshStatus();
+      setModalOpen(true);
+    });
 
+    // Auto profile from DOM scraper
+    window.api.onAutoProfile((p) => {
       if (p?.username) {
-        localStorage.setItem("twitter_profile", JSON.stringify(p));
         setProfile(p);
+        localStorage.setItem("twitter_profile", JSON.stringify(p));
       }
     });
   }, []);
 
-  // POST TWEET (popup unchanged)
+  // ------------------------------------------------
+  // POST A TWEET
+  // ------------------------------------------------
   const postTweet = async () => {
     if (!tweet.length) return;
 
@@ -94,7 +128,6 @@ export default function App() {
 
   return (
     <div className="p-8">
-
       {/* HEADER */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">X Desktop Client</h1>
@@ -152,11 +185,13 @@ export default function App() {
         </div>
       </div>
 
-      {/* MODAL */}
+      {/* ACCOUNTS MODAL */}
       {modalOpen && (
         <AccountsModal
           connected={connected}
           profile={profile}
+          twitchConnected={twitchConnected}
+          twitchProfile={twitchProfile}
           refreshStatus={refreshStatus}
           onClose={() => setModalOpen(false)}
         />

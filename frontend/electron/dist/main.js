@@ -22,18 +22,21 @@ function createWindow() {
     mainWindow.on("closed", () => (mainWindow = null));
 }
 electron_1.app.whenReady().then(createWindow);
-function notifyOAuthComplete() {
-    console.log("Sending oauth-complete to renderer");
+function notifyTwitterOAuthComplete() {
+    console.log("Sending oauth-complete to renderer (TWITTER)");
     mainWindow?.webContents.send("oauth-complete");
 }
-// -----------------------------------------------
-//  Smooth Fade-Out Close (prevents flicker)
-// -----------------------------------------------
+function notifyTwitchOAuthComplete() {
+    console.log("Sending twitch:oauth-complete to renderer");
+    mainWindow?.webContents.send("twitch:oauth-complete");
+}
+// -----------------------------------------------------------
+//        Smooth Fade-Out Close (USED BY BOTH SERVICES)
+// -----------------------------------------------------------
 function smoothClose(win) {
     if (win.isDestroyed())
         return;
     console.log("Closing popup smoothly…");
-    // BLOCK ALL NAVIGATION instantly (fixes flicker)
     win.webContents.on("will-navigate", (e) => e.preventDefault());
     win.webContents.on("will-redirect", (e) => e.preventDefault());
     win.webContents.on("did-start-navigation", (e) => e.preventDefault());
@@ -51,9 +54,9 @@ function smoothClose(win) {
         }
     }, 15);
 }
-// -----------------------------------------------
-// START OAUTH POPUP
-// -----------------------------------------------
+// -----------------------------------------------------------------
+// 🎯 🎯  X / TWITTER OAUTH (unchanged from your original code)
+// -----------------------------------------------------------------
 electron_1.ipcMain.handle("oauth-start", async () => {
     const res = await fetch(`${BACKEND_URL}/api/x/auth/login`);
     const data = await res.json();
@@ -72,9 +75,9 @@ electron_1.ipcMain.handle("oauth-start", async () => {
     });
     popup.setOpacity(1);
     popup.loadURL(data.url);
-    // -------------------------------------------
+    // -----------------------
     // DOM SCRAPING LOOP
-    // -------------------------------------------
+    // -----------------------
     const interval = setInterval(async () => {
         try {
             const result = await popup.webContents.executeJavaScript(`
@@ -122,9 +125,8 @@ electron_1.ipcMain.handle("oauth-start", async () => {
     // HANDLE REDIRECTS
     // -------------------------------------------
     popup.webContents.on("will-redirect", (_, url) => {
-        // 🔥 User pressed CANCEL
         if (url.includes("error=access_denied") || url.endsWith("/oauth2/authorize")) {
-            console.log("❌ User cancelled OAuth");
+            console.log("❌ User cancelled OAuth (Twitter)");
             clearInterval(interval);
             if (!closing) {
                 closing = true;
@@ -132,34 +134,30 @@ electron_1.ipcMain.handle("oauth-start", async () => {
             }
             return;
         }
-        // ✔ OAuth completed
         if (url.startsWith(`${BACKEND_URL}/api/x/auth/callback`)) {
-            console.log("OAuth callback detected");
+            console.log("OAuth callback detected (Twitter)");
             clearInterval(interval);
             if (!closing) {
                 closing = true;
                 smoothClose(popup);
             }
-            notifyOAuthComplete();
+            notifyTwitterOAuthComplete();
         }
     });
-    // -------------------------------------------
-    // WINDOW MANUALLY CLOSED (X button)
-    // -------------------------------------------
     popup.on("closed", async () => {
         clearInterval(interval);
         try {
             const res = await fetch(`${BACKEND_URL}/api/x/auth/status`);
             const status = await res.json();
             if (status.connected)
-                notifyOAuthComplete();
+                notifyTwitterOAuthComplete();
         }
         catch { }
     });
 });
-// -----------------------------------------------
-// BACKEND API PASSTHROUGH
-// -----------------------------------------------
+// -------------------------------------------------------
+// BACKEND PASSTHROUGH FOR TWITTER
+// -------------------------------------------------------
 electron_1.ipcMain.handle("auth-status", async () => {
     return fetch(`${BACKEND_URL}/api/x/auth/status`).then((r) => r.json());
 });
@@ -175,6 +173,88 @@ electron_1.ipcMain.handle("tweet-post", async (_, text) => {
 });
 electron_1.ipcMain.handle("oauth-logout", async () => {
     return fetch(`${BACKEND_URL}/api/x/auth/logout`, {
+        method: "POST",
+    }).then((r) => r.json());
+});
+// ==============================================================
+// 🟣  FINAL TWITCH OAUTH FLOW (FULL WORKING VERSION)
+// ==============================================================
+electron_1.ipcMain.handle("twitch:oauth-start", async () => {
+    console.log("Starting Twitch OAuth…");
+    // 1️⃣ Get Twitch login URL from your Spring Boot backend
+    const res = await fetch(`${BACKEND_URL}/api/twitch/auth/login`);
+    const data = await res.json();
+    if (!data.url) {
+        throw new Error("Twitch backend returned no login URL");
+    }
+    let closing = false;
+    // 2️⃣ Create popup window
+    const popup = new electron_1.BrowserWindow({
+        width: 600,
+        height: 800,
+        parent: mainWindow,
+        modal: true,
+        webPreferences: {
+            nodeIntegration: false,
+            session: electron_1.session.defaultSession,
+        },
+    });
+    // 3️⃣ REQUIRED: Twitch blocks Electron by default — fix by spoofing UA
+    popup.webContents.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/121.0 Safari/537.36");
+    // 4️⃣ Clear old Twitch cookies (fixes login not appearing)
+    await electron_1.session.defaultSession.clearStorageData({
+        storages: ["cookies"],
+        origin: "https://id.twitch.tv",
+    });
+    popup.setOpacity(1);
+    popup.loadURL(data.url);
+    // 5️⃣ Detect successful OAuth callback
+    popup.webContents.on("will-redirect", (_, url) => {
+        console.log("Twitch redirect:", url);
+        // Ignore Twitch's internal redirects — only handle callback
+        if (url.startsWith(`${BACKEND_URL}/api/twitch/auth/callback`)) {
+            console.log("✔ Twitch OAuth callback detected");
+            if (!closing) {
+                closing = true;
+                smoothClose(popup);
+            }
+            notifyTwitchOAuthComplete();
+        }
+    });
+    // 6️⃣ Detect manual close:
+    // If the backend already has a token, treat it as success.
+    popup.on("closed", async () => {
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/twitch/auth/status`);
+            const status = await res.json();
+            if (status.connected) {
+                console.log("Popup closed but Twitch token exists → completing login");
+                notifyTwitchOAuthComplete();
+            }
+        }
+        catch (err) {
+            console.warn("Twitch status check after close failed:", err);
+        }
+    });
+    return { success: true };
+});
+// -------------------------------------------------------
+// TWITCH STATUS
+// -------------------------------------------------------
+electron_1.ipcMain.handle("twitch:auth-status", async () => {
+    return fetch(`${BACKEND_URL}/api/twitch/auth/status`).then((r) => r.json());
+});
+// -------------------------------------------------------
+// TWITCH PROFILE
+// -------------------------------------------------------
+electron_1.ipcMain.handle("twitch:profile-get", async () => {
+    return fetch(`${BACKEND_URL}/api/twitch/auth/profile`).then((r) => r.json());
+});
+// -------------------------------------------------------
+// TWITCH LOGOUT
+// -------------------------------------------------------
+electron_1.ipcMain.handle("twitch:logout", async () => {
+    return fetch(`${BACKEND_URL}/api/twitch/auth/logout`, {
         method: "POST",
     }).then((r) => r.json());
 });
