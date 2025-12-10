@@ -31,4 +31,14 @@ contextBridge.exposeInMainWorld("api", {
   logoutTwitch: () => ipcRenderer.invoke("twitch:logout"),
   onTwitchOAuthComplete: (callback: any) =>
     ipcRenderer.on("twitch:oauth-complete", callback),
+
+  // -----------------------------------------
+  // PRETWEET STORAGE
+  // -----------------------------------------
+pretweetSave: (data: { text: string; platforms: string }) =>
+  ipcRenderer.invoke("pretweet:save", data),
+
+pretweetLoad: () => ipcRenderer.invoke("pretweet:load"),
+
+
 });

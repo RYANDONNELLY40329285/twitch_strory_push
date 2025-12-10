@@ -258,3 +258,17 @@ electron_1.ipcMain.handle("twitch:logout", async () => {
         method: "POST",
     }).then((r) => r.json());
 });
+// PRETWEET — SAVE (PATCHED)
+electron_1.ipcMain.handle("pretweet:save", async (_, data) => {
+    const res = await fetch(`${BACKEND_URL}/api/pretweet/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data) // now contains text + platforms
+    });
+    return await res.json();
+});
+// PRETWEET — LOAD (PATCHED)
+electron_1.ipcMain.handle("pretweet:load", async () => {
+    const res = await fetch(`${BACKEND_URL}/api/pretweet/load`);
+    return await res.json(); // returns { text, platforms }
+});

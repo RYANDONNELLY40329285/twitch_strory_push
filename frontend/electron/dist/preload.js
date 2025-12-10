@@ -26,4 +26,9 @@ electron_1.contextBridge.exposeInMainWorld("api", {
     getTwitchProfile: () => electron_1.ipcRenderer.invoke("twitch:profile-get"),
     logoutTwitch: () => electron_1.ipcRenderer.invoke("twitch:logout"),
     onTwitchOAuthComplete: (callback) => electron_1.ipcRenderer.on("twitch:oauth-complete", callback),
+    // -----------------------------------------
+    // PRETWEET STORAGE
+    // -----------------------------------------
+    pretweetSave: (data) => electron_1.ipcRenderer.invoke("pretweet:save", data),
+    pretweetLoad: () => electron_1.ipcRenderer.invoke("pretweet:load"),
 });
