@@ -1,5 +1,6 @@
 package com.ryan.socialbackend.controllers;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.ryan.socialbackend.services.TwitchService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -53,10 +54,13 @@ public class TwitchAuthController {
         return Map.of("connected", twitchService.getStoredToken() != null);
     }
 
-    @GetMapping("/refresh")
-public Map<String, Object> refresh() {
-    twitchService.refreshAccessTokenIfNeeded();
-    return Map.of("refreshed", true);
+
+    @GetMapping("/force-refresh")
+public Map<String, Object> forceRefresh() throws JsonProcessingException {
+    twitchService.forceRefreshNow();
+    return Map.of("status", "forced refresh completed");
 }
+
+
 
 }

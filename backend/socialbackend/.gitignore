@@ -40,3 +40,12 @@ build/
 src/main/resources/application.properties
 src/main/resources/application.yml
 *.properties
+
+
+
+
+# Ignore SQLite OAuth token database
+data/tokens.db
+data/*.db
+data/*.db-shm
+data/*.db-wal

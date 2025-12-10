@@ -1,11 +1,12 @@
 package com.ryan.socialbackend.services;
 
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ryan.socialbackend.security.TwitchTokenStore;
 
 import java.util.List;
@@ -24,14 +25,13 @@ public class TwitchService {
     private String redirectUri;
 
     private final RestTemplate rest = new RestTemplate();
-   private final TwitchTokenStore tokenStore;
+    private final TwitchTokenStore tokenStore;
 
-    private long expiresAt; // epoch millis
     private Map<String, Object> cachedProfile;
 
- public TwitchService(TwitchTokenStore tokenStore) {
-    this.tokenStore = tokenStore;
-}
+    public TwitchService(TwitchTokenStore tokenStore) {
+        this.tokenStore = tokenStore;
+    }
 
     // --------------------------------------------------------
     // Generate Twitch Login URL
@@ -66,10 +66,10 @@ public class TwitchService {
         String refreshToken = (String) response.get("refresh_token");
         Integer expiresIn = (Integer) response.get("expires_in");
 
-        expiresAt = System.currentTimeMillis() + (expiresIn * 1000L);
+        long expiresAt = System.currentTimeMillis() + (expiresIn * 1000L);
 
-        // 🔐 Store encrypted
-        tokenStore.storeTokens(accessToken, refreshToken);
+        // 🔐 Save encrypted tokens + expiry in SQLite
+        tokenStore.save(accessToken, refreshToken, expiresAt);
 
         cachedProfile = null;
     }
@@ -79,14 +79,15 @@ public class TwitchService {
     // --------------------------------------------------------
     public void refreshAccessTokenIfNeeded() {
 
-        long now = System.currentTimeMillis();
-
         String accessToken = tokenStore.getAccessToken();
         String refreshToken = tokenStore.getRefreshToken();
+        Long expiresAt = tokenStore.getExpiresAt();
 
-        if (accessToken == null || refreshToken == null) return;
+        if (accessToken == null || refreshToken == null || expiresAt == null) return;
 
-        if (now < expiresAt - 60000) return; // refresh only if expiring soon
+        long now = System.currentTimeMillis();
+
+        if (now < expiresAt - 60000) return; // not time to refresh yet
 
         String url = "https://id.twitch.tv/oauth2/token"
                 + "?grant_type=refresh_token"
@@ -96,18 +97,21 @@ public class TwitchService {
 
         Map<String, Object> response = rest.postForObject(url, null, Map.class);
 
+        // If refresh fails, delete everything and force relogin
         if (response == null || response.get("access_token") == null) {
-            throw new RuntimeException("Failed to refresh Twitch access token.");
+            tokenStore.clear();
+            cachedProfile = null;
+            return;
         }
 
         String newAccess = (String) response.get("access_token");
         String newRefresh = (String) response.get("refresh_token");
         int expiresIn = (Integer) response.get("expires_in");
 
-        expiresAt = System.currentTimeMillis() + (expiresIn * 1000L);
+        long newExpiresAt = System.currentTimeMillis() + (expiresIn * 1000L);
 
-        // 🔐 Store encrypted again
-        tokenStore.storeTokens(newAccess, newRefresh);
+        // 🔐 Save new encrypted tokens
+        tokenStore.save(newAccess, newRefresh, newExpiresAt);
 
         cachedProfile = null;
     }
@@ -118,7 +122,6 @@ public class TwitchService {
     public Map<String, Object> getUserProfile() {
 
         String accessToken = tokenStore.getAccessToken();
-
         if (accessToken == null) return null;
 
         refreshAccessTokenIfNeeded();
@@ -165,6 +168,67 @@ public class TwitchService {
     public void clearToken() {
         tokenStore.clear();
         cachedProfile = null;
-        expiresAt = 0;
     }
+
+
+public void forceRefreshNow() {
+
+    String refreshToken = tokenStore.getRefreshToken();
+    if (refreshToken == null) {
+        throw new RuntimeException("No refresh token stored — cannot refresh.");
+    }
+
+    System.out.println("🔄 FORCING TWITCH REFRESH...");
+
+    // Correct Twitch refresh token endpoint (POST with form body)
+    String url = "https://id.twitch.tv/oauth2/token";
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+    // Correct refresh parameters (Twitch does NOT accept refresh via query string anymore)
+    String body =
+            "grant_type=refresh_token" +
+            "&refresh_token=" + refreshToken +
+            "&client_id=" + clientId +
+            "&client_secret=" + clientSecret;
+
+    HttpEntity<String> entity = new HttpEntity<>(body, headers);
+
+    Map<String, Object> response = rest.postForObject(url, entity, Map.class);
+
+    // Log response safely (no checked exceptions)
+    try {
+        System.out.println("REFRESH RESPONSE:");
+        System.out.println(new ObjectMapper().writeValueAsString(response));
+    } catch (Exception e) {
+        System.out.println("Failed to print refresh response JSON: " + e.getMessage());
+    }
+
+    // If refresh fails → delete saved tokens
+    if (response == null || response.get("access_token") == null) {
+        tokenStore.clear();
+        cachedProfile = null;
+        throw new RuntimeException("Refresh failed — tokens deleted.");
+    }
+
+    // Extract new tokens
+    String newAccess = (String) response.get("access_token");
+    String newRefresh = (String) response.get("refresh_token"); // may be null (Twitch often does NOT rotate refresh tokens)
+    Integer expiresIn = (Integer) response.get("expires_in");
+
+    long newExpiresAt = System.currentTimeMillis() + (expiresIn * 1000L);
+
+    // Save encrypted tokens + new expiry
+    tokenStore.save(newAccess, newRefresh, newExpiresAt);
+
+    System.out.println("✔ Refresh complete — new access token saved.");
+}
+
+  
+
+
+
+
+
 }

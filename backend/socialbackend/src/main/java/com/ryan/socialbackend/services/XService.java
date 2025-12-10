@@ -2,9 +2,7 @@ package com.ryan.socialbackend.services;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import com.ryan.socialbackend.security.XTokenStore;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -19,7 +17,7 @@ import java.util.Map;
 public class XService {
 
     private final RestTemplate restTemplate = new RestTemplate();
-   private final XTokenStore tokenStore;
+    private final XTokenStore tokenStore;
 
     @Value("${x.client-id}")
     private String clientId;
@@ -33,17 +31,14 @@ public class XService {
     @Value("${x.scope}")
     private String scope;
 
-public XService(XTokenStore tokenStore) {
-    this.tokenStore = tokenStore;
-}
+    public XService(XTokenStore tokenStore) {
+        this.tokenStore = tokenStore;
+    }
 
     public String getStoredToken() {
         return tokenStore.getAccessToken();
     }
 
-    // ---------------------------------------------------
-    // 1) Build the login URL
-    // ---------------------------------------------------
     public String generateLoginUrl() {
         return "https://twitter.com/i/oauth2/authorize"
                 + "?response_type=code"
@@ -56,10 +51,8 @@ public XService(XTokenStore tokenStore) {
                 + "&code_challenge_method=plain";
     }
 
-    // ---------------------------------------------------
-    // 2) Exchange code for access token
-    // ---------------------------------------------------
-    public Map<String, Object> getAccessToken(String code) throws HttpClientErrorException, JsonProcessingException {
+    public Map<String, Object> getAccessToken(String code)
+            throws HttpClientErrorException, JsonProcessingException {
 
         String url = "https://api.twitter.com/2/oauth2/token";
 
@@ -86,29 +79,16 @@ public XService(XTokenStore tokenStore) {
 
         Map<String, Object> tokenResponse = response.getBody();
 
-        System.out.println("TOKEN RESPONSE:");
-        System.out.println(new ObjectMapper().writeValueAsString(tokenResponse));
-
         if (tokenResponse != null && tokenResponse.containsKey("access_token")) {
-            String plainAccessToken = tokenResponse.get("access_token").toString();
-
-            // 🔐 Encrypt & store token securely
-            tokenStore.storeAccessToken(plainAccessToken);
+            tokenStore.save(tokenResponse.get("access_token").toString());
         }
 
         return tokenResponse;
     }
 
-    // ---------------------------------------------------
-    // 3) Post Tweet
-    // ---------------------------------------------------
     public String postTweet(String text) {
-
         String accessToken = tokenStore.getAccessToken();
-
-        if (accessToken == null) {
-            return "ERROR: Not authenticated with X.";
-        }
+        if (accessToken == null) return "ERROR: Not authenticated with X.";
 
         String url = "https://api.twitter.com/2/tweets";
 
@@ -116,32 +96,19 @@ public XService(XTokenStore tokenStore) {
         headers.setBearerAuth(accessToken);
         headers.setContentType(MediaType.APPLICATION_JSON);
 
-        Map<String, Object> json = Map.of("text", text);
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(json, headers);
+        HttpEntity<?> entity = new HttpEntity<>(Map.of("text", text), headers);
 
-        ResponseEntity<String> response =
-                restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
-
-        return response.getBody();
+        return restTemplate.exchange(url, HttpMethod.POST, entity, String.class)
+                .getBody();
     }
 
-    // ---------------------------------------------------
-    // 4) Clear
-    // ---------------------------------------------------
     public void clearToken() {
         tokenStore.clear();
     }
 
-    // ---------------------------------------------------
-    // 5) Profile (Free Tier cannot return identity)
-    // ---------------------------------------------------
     public Map<String, Object> getUserProfile() {
-
         if (tokenStore.getAccessToken() == null) {
-            return Map.of(
-                    "connected", false,
-                    "error", "Not authenticated"
-            );
+            return Map.of("connected", false, "error", "Not authenticated");
         }
 
         return Map.of(
