@@ -25,6 +25,9 @@ public class TwitchService {
 
     private final RestTemplate rest = new RestTemplate();
 
+    private long expiresAt; // epoch millis when token expires
+private String refreshToken;
+
     // --------------------------------------------------------
     // Generate Twitch Login URL
     // --------------------------------------------------------
@@ -39,61 +42,106 @@ public class TwitchService {
     // --------------------------------------------------------
     // Exchange code for access token
     // --------------------------------------------------------
-    public void getAccessToken(String code) {
-        String url = "https://id.twitch.tv/oauth2/token"
-                + "?client_id=" + clientId
-                + "&client_secret=" + clientSecret
-                + "&code=" + code
-                + "&grant_type=authorization_code"
-                + "&redirect_uri=" + redirectUri;
 
-        Map<String, Object> response = rest.postForObject(url, null, Map.class);
 
-        if (response == null || response.get("access_token") == null) {
-            throw new RuntimeException("Failed to get Twitch access token.");
-        }
+public void getAccessToken(String code) {
+    String url = "https://id.twitch.tv/oauth2/token"
+            + "?client_id=" + clientId
+            + "&client_secret=" + clientSecret
+            + "&code=" + code
+            + "&grant_type=authorization_code"
+            + "&redirect_uri=" + redirectUri;
 
-        accessToken = (String) response.get("access_token");
-        cachedProfile = null;
+    Map<String, Object> response = rest.postForObject(url, null, Map.class);
+
+    if (response == null || response.get("access_token") == null) {
+        throw new RuntimeException("Failed to get Twitch access token.");
     }
+
+    accessToken = (String) response.get("access_token");
+    refreshToken = (String) response.get("refresh_token");
+
+    Integer expiresIn = (Integer) response.get("expires_in"); // seconds
+    expiresAt = System.currentTimeMillis() + (expiresIn * 1000L);
+
+    cachedProfile = null;
+}
+
+
+
 
     // --------------------------------------------------------
     // Fetch and format Twitch user profile
     // --------------------------------------------------------
-    public Map<String, Object> getUserProfile() {
-        if (accessToken == null) return null;
-        if (cachedProfile != null) return cachedProfile;
+   public Map<String, Object> getUserProfile() {
+    if (accessToken == null) return null;
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + accessToken);
-        headers.set("Client-Id", clientId);
+    refreshAccessTokenIfNeeded(); // <--- NEW
 
-        HttpEntity<?> entity = new HttpEntity<>(headers);
+    if (cachedProfile != null) return cachedProfile;
 
-        String url = "https://api.twitch.tv/helix/users";
+    HttpHeaders headers = new HttpHeaders();
+    headers.set("Authorization", "Bearer " + accessToken);
+    headers.set("Client-Id", clientId);
 
-        Map<String, Object> result = rest.exchange(
-                url,
-                HttpMethod.GET,
-                entity,
-                Map.class
-        ).getBody();
+    HttpEntity<?> entity = new HttpEntity<>(headers);
 
-        if (result == null || result.get("data") == null) {
-            throw new RuntimeException("Failed to fetch Twitch profile.");
-        }
+    String url = "https://api.twitch.tv/helix/users";
 
-        Map<String, Object> user = ((List<Map<String, Object>>) result.get("data")).get(0);
+    Map<String, Object> result = rest.exchange(
+            url,
+            HttpMethod.GET,
+            entity,
+            Map.class
+    ).getBody();
 
-        // ✅ Normalize to match your Twitter-style format
-        cachedProfile = Map.of(
-                "username", user.get("login"),
-                "name", user.get("display_name"),
-                "profile_image_url", user.get("profile_image_url")
-        );
-
-        return cachedProfile;
+    if (result == null || result.get("data") == null) {
+        throw new RuntimeException("Failed to fetch Twitch profile.");
     }
+
+    Map<String, Object> user = ((List<Map<String, Object>>) result.get("data")).get(0);
+
+    cachedProfile = Map.of(
+            "username", user.get("login"),
+            "name", user.get("display_name"),
+            "profile_image_url", user.get("profile_image_url")
+    );
+
+    return cachedProfile;
+}
+
+
+
+
+    public void refreshAccessTokenIfNeeded() {
+    long now = System.currentTimeMillis();
+
+    // Only refresh if within last 60 seconds of life (OBS industry standard)
+    if (accessToken == null || refreshToken == null || now < expiresAt - 60000) {
+        return; // no refresh needed
+    }
+
+    String url = "https://id.twitch.tv/oauth2/token"
+            + "?grant_type=refresh_token"
+            + "&refresh_token=" + refreshToken
+            + "&client_id=" + clientId
+            + "&client_secret=" + clientSecret;
+
+    Map<String, Object> response = rest.postForObject(url, null, Map.class);
+
+    if (response == null || response.get("access_token") == null) {
+        throw new RuntimeException("Failed to refresh Twitch access token.");
+    }
+
+    accessToken = (String) response.get("access_token");
+    refreshToken = (String) response.get("refresh_token");
+
+    Integer expiresIn = (Integer) response.get("expires_in");
+    expiresAt = System.currentTimeMillis() + (expiresIn * 1000L);
+
+    cachedProfile = null;
+}
+
 
     // --------------------------------------------------------
     // Token helpers
@@ -106,4 +154,7 @@ public class TwitchService {
         accessToken = null;
         cachedProfile = null;
     }
+
+    
+
 }

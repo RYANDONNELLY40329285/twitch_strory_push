@@ -52,4 +52,11 @@ public class TwitchAuthController {
     public Map<String, Object> status() {
         return Map.of("connected", twitchService.getStoredToken() != null);
     }
+
+    @GetMapping("/refresh")
+public Map<String, Object> refresh() {
+    twitchService.refreshAccessTokenIfNeeded();
+    return Map.of("refreshed", true);
+}
+
 }
