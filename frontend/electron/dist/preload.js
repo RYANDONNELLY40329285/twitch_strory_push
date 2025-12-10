@@ -31,4 +31,5 @@ electron_1.contextBridge.exposeInMainWorld("api", {
     // -----------------------------------------
     pretweetSave: (data) => electron_1.ipcRenderer.invoke("pretweet:save", data),
     pretweetLoad: () => electron_1.ipcRenderer.invoke("pretweet:load"),
+    pretweetSetEnabled: (enabled) => electron_1.ipcRenderer.invoke("pretweet:setEnabled", enabled),
 });

@@ -263,12 +263,19 @@ electron_1.ipcMain.handle("pretweet:save", async (_, data) => {
     const res = await fetch(`${BACKEND_URL}/api/pretweet/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data) // now contains text + platforms
+        body: JSON.stringify(data),
     });
     return await res.json();
 });
-// PRETWEET — LOAD (PATCHED)
 electron_1.ipcMain.handle("pretweet:load", async () => {
     const res = await fetch(`${BACKEND_URL}/api/pretweet/load`);
-    return await res.json(); // returns { text, platforms }
+    return await res.json();
+});
+electron_1.ipcMain.handle("pretweet:setEnabled", async (_, enabled) => {
+    const res = await fetch(`${BACKEND_URL}/api/pretweet/enabled`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+    });
+    return await res.json();
 });

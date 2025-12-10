@@ -35,10 +35,16 @@ contextBridge.exposeInMainWorld("api", {
   // -----------------------------------------
   // PRETWEET STORAGE
   // -----------------------------------------
-pretweetSave: (data: { text: string; platforms: string }) =>
+pretweetSave: (data: { text: string; platforms: string; enabled: boolean }) =>
   ipcRenderer.invoke("pretweet:save", data),
 
-pretweetLoad: () => ipcRenderer.invoke("pretweet:load"),
+pretweetLoad: (): Promise<{
+  text: string;
+  platforms: string;
+  enabled: boolean;
+}> => ipcRenderer.invoke("pretweet:load"),
 
+pretweetSetEnabled: (enabled: boolean): Promise<any> =>
+  ipcRenderer.invoke("pretweet:setEnabled", enabled),
 
 });
