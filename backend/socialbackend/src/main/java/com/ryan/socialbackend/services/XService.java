@@ -2,6 +2,9 @@ package com.ryan.socialbackend.services;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import com.ryan.socialbackend.security.XTokenStore;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -15,8 +18,8 @@ import java.util.Map;
 @Service
 public class XService {
 
-    // Only the access token can be stored on Free Tier
-    private String accessToken;
+    private final RestTemplate restTemplate = new RestTemplate();
+   private final XTokenStore tokenStore;
 
     @Value("${x.client-id}")
     private String clientId;
@@ -30,10 +33,12 @@ public class XService {
     @Value("${x.scope}")
     private String scope;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+public XService(XTokenStore tokenStore) {
+    this.tokenStore = tokenStore;
+}
 
     public String getStoredToken() {
-        return accessToken;
+        return tokenStore.getAccessToken();
     }
 
     // ---------------------------------------------------
@@ -52,7 +57,7 @@ public class XService {
     }
 
     // ---------------------------------------------------
-    // 2) Exchange authorization code for access token
+    // 2) Exchange code for access token
     // ---------------------------------------------------
     public Map<String, Object> getAccessToken(String code) throws HttpClientErrorException, JsonProcessingException {
 
@@ -81,13 +86,14 @@ public class XService {
 
         Map<String, Object> tokenResponse = response.getBody();
 
-        // Debug output so you can see exactly what Twitter returns
         System.out.println("TOKEN RESPONSE:");
         System.out.println(new ObjectMapper().writeValueAsString(tokenResponse));
 
-        // Store the access token ONLY — Free Tier returns no user identity
         if (tokenResponse != null && tokenResponse.containsKey("access_token")) {
-            this.accessToken = tokenResponse.get("access_token").toString();
+            String plainAccessToken = tokenResponse.get("access_token").toString();
+
+            // 🔐 Encrypt & store token securely
+            tokenStore.storeAccessToken(plainAccessToken);
         }
 
         return tokenResponse;
@@ -97,6 +103,8 @@ public class XService {
     // 3) Post Tweet
     // ---------------------------------------------------
     public String postTweet(String text) {
+
+        String accessToken = tokenStore.getAccessToken();
 
         if (accessToken == null) {
             return "ERROR: Not authenticated with X.";
@@ -121,7 +129,7 @@ public class XService {
     // 4) Clear
     // ---------------------------------------------------
     public void clearToken() {
-        this.accessToken = null;
+        tokenStore.clear();
     }
 
     // ---------------------------------------------------
@@ -129,14 +137,13 @@ public class XService {
     // ---------------------------------------------------
     public Map<String, Object> getUserProfile() {
 
-        if (accessToken == null) {
+        if (tokenStore.getAccessToken() == null) {
             return Map.of(
                     "connected", false,
                     "error", "Not authenticated"
             );
         }
 
-        // Free Tier does NOT provide username, name, or profile image
         return Map.of(
                 "connected", true,
                 "message", "Authenticated with X. User identity is not available on Free Tier."
