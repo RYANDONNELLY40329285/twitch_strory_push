@@ -91,20 +91,9 @@ public String postTweet(String text) {
     String accessToken = tokenStore.getAccessToken();
     if (accessToken == null) return "ERROR: Not authenticated with X.";
 
-    // -------------------------------------------------------
-    // 🕒 Generate timestamp (visible in logs)
-    // -------------------------------------------------------
-    String timestamp = java.time.LocalDateTime.now().toString();
-    System.out.println("🕒 Tweet timestamp: " + timestamp);
-
-    // -------------------------------------------------------
-    // 🔥 Invisible uniqueness: add timestamp encoded invisibly
-    //    Use INVISIBLE SEPARATOR (U+2063) + timestamp characters
-    // -------------------------------------------------------
-    String invisibleTimestamp = "\u2063" + timestamp.replaceAll("[^0-9]", "") + "\u2063";
-
-    // Combine user text + invisible uniqueness
-    String uniqueText = text + invisibleTimestamp;
+    // Add zero-width space to avoid duplicate errors
+    String timestamp = new java.text.SimpleDateFormat("dd MMM yyyy — HH:mm").format(new java.util.Date());
+    String uniqueText = text + " [" + timestamp + "]" + "\u200B";
 
     String url = "https://api.twitter.com/2/tweets";
 
@@ -114,15 +103,45 @@ public String postTweet(String text) {
 
     HttpEntity<?> entity = new HttpEntity<>(Map.of("text", uniqueText), headers);
 
-    try {
-        System.out.println("🚀 Sending Tweet: " + text);
-        return restTemplate.exchange(url, HttpMethod.POST, entity, String.class)
-                .getBody();
-    } catch (HttpClientErrorException e) {
-        System.out.println("❌ Tweet failed: " + e.getResponseBodyAsString());
-        throw e;
+    int maxRetries = 5;
+    int retryDelayMs = 30_000; // 30 seconds
+
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            System.out.println("🚀 Sending Tweet (attempt " + attempt + "/" + maxRetries + ")...");
+            return restTemplate.exchange(url, HttpMethod.POST, entity, String.class).getBody();
+        }
+        catch (HttpClientErrorException e) {
+            int status = e.getStatusCode().value();
+
+            // ----------- RATE LIMIT HANDLING (429) -----------
+            if (status == 429) {
+                System.out.println("⚠ Twitter rate limit hit (429). Retrying in 30 seconds...");
+                try {
+                    Thread.sleep(retryDelayMs);
+                } catch (InterruptedException ignored) {}
+                continue; // try again
+            }
+
+            // ----------- FORBIDDEN / DUPLICATE CONTENT -----------
+            if (status == 403) {
+                System.out.println("❌ Tweet forbidden: " + e.getResponseBodyAsString());
+                return "ERROR: " + e.getResponseBodyAsString();
+            }
+
+            // ----------- OTHER ERRORS -----------
+            System.out.println("❌ Tweet failed: " + e.getResponseBodyAsString());
+            return "ERROR: " + e.getResponseBodyAsString();
+        }
+        catch (Exception e) {
+            System.out.println("❌ Unexpected error while tweeting: " + e.getMessage());
+            return "ERROR: " + e.getMessage();
+        }
     }
+
+    return "ERROR: Failed after " + maxRetries + " attempts due to rate limiting.";
 }
+
 
 
 
