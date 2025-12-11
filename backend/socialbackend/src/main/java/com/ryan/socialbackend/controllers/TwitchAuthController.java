@@ -26,31 +26,37 @@ public class TwitchAuthController {
         return Map.of("url", twitchService.generateLoginUrl());
     }
 
-    @GetMapping("/callback")
-    public ResponseEntity<?> callback(@RequestParam String code) {
-        try {
-            twitchService.getAccessToken(code);
+ @GetMapping("/callback")
+public ResponseEntity<?> callback(@RequestParam String code) {
+    try {
+        twitchService.getAccessToken(code);
 
-            return ResponseEntity.ok(
-                "<html><body><script>window.close();</script>Login successful. You may close this window.</body></html>"
-            );
+        // ✔ REPLACE OLD RESPONSE WITH THIS ONE:
+        return ResponseEntity.ok(
+            "<html><body style='background:#1e1e1e;color:white;font-family:sans-serif;text-align:center;padding-top:50px;'>"
+            + "<h2>✔ Twitch Login Successful</h2>"
+            + "<p>You may now return to the application.</p>"
+            + "</body></html>"
+        );
 
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "twitch_login_failed", "message", e.getMessage()));
-        }
+    } catch (Exception e) {
+        e.printStackTrace();
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", "twitch_login_failed", "message", e.getMessage()));
     }
+}
 
     @GetMapping("/profile")
     public Map<String, Object> profile() {
         return twitchService.getUserProfile();
     }
 
-    @PostMapping("/logout")
+     @PostMapping("/logout")
     public Map<String, Object> logout() {
-        twitchService.clearToken();
+        twitchService.clearToken();  // now deletes EventSub too
         return Map.of("success", true);
     }
+
 
     @GetMapping("/status")
     public Map<String, Object> status() {

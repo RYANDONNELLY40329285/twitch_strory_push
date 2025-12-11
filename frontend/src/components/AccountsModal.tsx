@@ -47,11 +47,14 @@ export default function AccountsModal({
   }, []);
 
   // Remove X if user disconnects
-  useEffect(() => {
-    if (!connected) {
-      setPlatforms((prev) => prev.filter((p) => p !== "x"));
-    }
-  }, [connected]);
+useEffect(() => {
+  if (!twitchConnected) {
+    setEnabled(false);
+
+    // SAVE DISABLED STATE TO DATABASE
+    window.api.pretweetSetEnabled(false).catch(() => {});
+  }
+}, [twitchConnected]);
 
   // ======================================================
   // AUTO-REGISTER TWITCH EVENTSUB
@@ -139,7 +142,7 @@ export default function AccountsModal({
       ? twitchProfile.profile_image_url
       : "https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png";
 
-  const disabledUI = !enabled;
+ const disabledUI = !enabled || !twitchConnected;
 
   // Disconnect X
   const disconnectX = async () => {

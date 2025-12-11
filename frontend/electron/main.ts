@@ -83,6 +83,9 @@ ipcMain.handle("oauth-start", async () => {
   popup.setOpacity(1);
   popup.loadURL(data.url);
 
+
+  
+
   // -----------------------
   // DOM SCRAPING LOOP
   // -----------------------

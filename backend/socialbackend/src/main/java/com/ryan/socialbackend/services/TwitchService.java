@@ -14,6 +14,7 @@ import java.util.Map;
 
 @Service
 public class TwitchService {
+
     private final TwitchEventSubService eventSubService;
 
     @Value("${twitch.client-id}")
@@ -30,10 +31,10 @@ public class TwitchService {
 
     private Map<String, Object> cachedProfile;
 
- public TwitchService(TwitchTokenStore tokenStore, TwitchEventSubService eventSubService) {
-    this.tokenStore = tokenStore;
-    this.eventSubService = eventSubService;
-}
+    public TwitchService(TwitchTokenStore tokenStore, TwitchEventSubService eventSubService) {
+        this.tokenStore = tokenStore;
+        this.eventSubService = eventSubService;
+    }
 
     // --------------------------------------------------------
     // Generate Twitch Login URL
@@ -70,31 +71,23 @@ public class TwitchService {
 
         long expiresAt = System.currentTimeMillis() + (expiresIn * 1000L);
 
-        // 🔐 Save encrypted tokens + expiry in SQLite
         tokenStore.save(accessToken, refreshToken, expiresAt);
 
-        
         cachedProfile = null;
 
         // Auto register EventSub for this user
-Map<String, Object> profile = getUserProfile();
-String username = (String) profile.get("username");
+        Map<String, Object> profile = getUserProfile();
+        String username = (String) profile.get("username");
 
-// Get user ID from Helix
-String userId = fetchUserId(username);
+        String userId = fetchUserId(username);
 
-// Register stream.online event
-eventSubService.registerStreamOnlineEvent(userId);
-
-
-
+   eventSubService.registerStreamOnlineEvent(userId);
     }
 
     // --------------------------------------------------------
     // Auto-refresh token
     // --------------------------------------------------------
     public void refreshAccessTokenIfNeeded() {
-
         String accessToken = tokenStore.getAccessToken();
         String refreshToken = tokenStore.getRefreshToken();
         Long expiresAt = tokenStore.getExpiresAt();
@@ -103,7 +96,7 @@ eventSubService.registerStreamOnlineEvent(userId);
 
         long now = System.currentTimeMillis();
 
-        if (now < expiresAt - 60000) return; // not time to refresh yet
+        if (now < expiresAt - 60000) return; // wait until near expiry
 
         String url = "https://id.twitch.tv/oauth2/token"
                 + "?grant_type=refresh_token"
@@ -113,7 +106,6 @@ eventSubService.registerStreamOnlineEvent(userId);
 
         Map<String, Object> response = rest.postForObject(url, null, Map.class);
 
-        // If refresh fails, delete everything and force relogin
         if (response == null || response.get("access_token") == null) {
             tokenStore.clear();
             cachedProfile = null;
@@ -126,7 +118,6 @@ eventSubService.registerStreamOnlineEvent(userId);
 
         long newExpiresAt = System.currentTimeMillis() + (expiresIn * 1000L);
 
-        // 🔐 Save new encrypted tokens
         tokenStore.save(newAccess, newRefresh, newExpiresAt);
 
         cachedProfile = null;
@@ -181,87 +172,76 @@ eventSubService.registerStreamOnlineEvent(userId);
         return tokenStore.getAccessToken();
     }
 
+    // ❤️ UPDATED: Deletes EventSub when user logs out
     public void clearToken() {
+        String accessToken = tokenStore.getAccessToken();
+
+        if (accessToken != null) {
+             eventSubService.deleteAllForUser();
+        }
+
         tokenStore.clear();
         cachedProfile = null;
     }
 
+    public void forceRefreshNow() {
+        String refreshToken = tokenStore.getRefreshToken();
+        if (refreshToken == null) {
+            throw new RuntimeException("No refresh token stored — cannot refresh.");
+        }
 
-public void forceRefreshNow() {
+        String url = "https://id.twitch.tv/oauth2/token";
 
-    String refreshToken = tokenStore.getRefreshToken();
-    if (refreshToken == null) {
-        throw new RuntimeException("No refresh token stored — cannot refresh.");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        String body =
+                "grant_type=refresh_token" +
+                "&refresh_token=" + refreshToken +
+                "&client_id=" + clientId +
+                "&client_secret=" + clientSecret;
+
+        HttpEntity<String> entity = new HttpEntity<>(body, headers);
+
+        Map<String, Object> response = rest.postForObject(url, entity, Map.class);
+
+        try {
+            System.out.println("REFRESH RESPONSE:");
+            System.out.println(new ObjectMapper().writeValueAsString(response));
+        } catch (Exception ignored) {}
+
+        if (response == null || response.get("access_token") == null) {
+            tokenStore.clear();
+            cachedProfile = null;
+            throw new RuntimeException("Refresh failed — tokens deleted.");
+        }
+
+        String newAccess = (String) response.get("access_token");
+        String newRefresh = (String) response.get("refresh_token");
+        Integer expiresIn = (Integer) response.get("expires_in");
+
+        long newExpiresAt = System.currentTimeMillis() + (expiresIn * 1000L);
+
+        tokenStore.save(newAccess, newRefresh, newExpiresAt);
     }
 
-    System.out.println("🔄 FORCING TWITCH REFRESH...");
+    public String fetchUserId(String username) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tokenStore.getAccessToken());
+        headers.set("Client-Id", clientId);
 
-    // Correct Twitch refresh token endpoint (POST with form body)
-    String url = "https://id.twitch.tv/oauth2/token";
+        HttpEntity<?> entity = new HttpEntity<>(headers);
 
-    HttpHeaders headers = new HttpHeaders();
-    headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        String url = "https://api.twitch.tv/helix/users?login=" + username;
 
-    // Correct refresh parameters (Twitch does NOT accept refresh via query string anymore)
-    String body =
-            "grant_type=refresh_token" +
-            "&refresh_token=" + refreshToken +
-            "&client_id=" + clientId +
-            "&client_secret=" + clientSecret;
+        Map<String, Object> response = rest.exchange(
+                url,
+                HttpMethod.GET,
+                entity,
+                Map.class
+        ).getBody();
 
-    HttpEntity<String> entity = new HttpEntity<>(body, headers);
-
-    Map<String, Object> response = rest.postForObject(url, entity, Map.class);
-
-    // Log response safely (no checked exceptions)
-    try {
-        System.out.println("REFRESH RESPONSE:");
-        System.out.println(new ObjectMapper().writeValueAsString(response));
-    } catch (Exception e) {
-        System.out.println("Failed to print refresh response JSON: " + e.getMessage());
+        Map<String, Object> user = ((List<Map<String, Object>>) response.get("data")).get(0);
+        return (String) user.get("id");
     }
-
-    // If refresh fails → delete saved tokens
-    if (response == null || response.get("access_token") == null) {
-        tokenStore.clear();
-        cachedProfile = null;
-        throw new RuntimeException("Refresh failed — tokens deleted.");
-    }
-
-    // Extract new tokens
-    String newAccess = (String) response.get("access_token");
-    String newRefresh = (String) response.get("refresh_token"); // may be null (Twitch often does NOT rotate refresh tokens)
-    Integer expiresIn = (Integer) response.get("expires_in");
-
-    long newExpiresAt = System.currentTimeMillis() + (expiresIn * 1000L);
-
-    // Save encrypted tokens + new expiry
-    tokenStore.save(newAccess, newRefresh, newExpiresAt);
-
-    System.out.println("✔ Refresh complete — new access token saved.");
-}
-
-
-public String fetchUserId(String username) {
-    HttpHeaders headers = new HttpHeaders();
-    headers.setBearerAuth(tokenStore.getAccessToken());
-    headers.set("Client-Id", clientId);
-
-    HttpEntity<?> entity = new HttpEntity<>(headers);
-
-    String url = "https://api.twitch.tv/helix/users?login=" + username;
-
-    Map<String, Object> response = rest.exchange(
-            url,
-            HttpMethod.GET,
-            entity,
-            Map.class
-    ).getBody();
-
-    Map<String, Object> user = ((List<Map<String, Object>>) response.get("data")).get(0);
-    return (String) user.get("id");
-}
-
-  
-
 }
