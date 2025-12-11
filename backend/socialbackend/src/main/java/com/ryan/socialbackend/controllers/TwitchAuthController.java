@@ -2,6 +2,7 @@ package com.ryan.socialbackend.controllers;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.ryan.socialbackend.services.TwitchService;
+import com.ryan.socialbackend.services.TwitchAppService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,9 +14,11 @@ import java.util.Map;
 public class TwitchAuthController {
 
     private final TwitchService twitchService;
+    private final TwitchAppService twitchAppService;
 
-    public TwitchAuthController(TwitchService twitchService) {
+    public TwitchAuthController(TwitchService twitchService, TwitchAppService twitchAppService) {
         this.twitchService = twitchService;
+        this.twitchAppService = twitchAppService;
     }
 
     @GetMapping("/login")
@@ -29,7 +32,7 @@ public class TwitchAuthController {
             twitchService.getAccessToken(code);
 
             return ResponseEntity.ok(
-                    "<html><body><script>window.close();</script>Login successful. You may close this window.</body></html>"
+                "<html><body><script>window.close();</script>Login successful. You may close this window.</body></html>"
             );
 
         } catch (Exception e) {
@@ -54,13 +57,33 @@ public class TwitchAuthController {
         return Map.of("connected", twitchService.getStoredToken() != null);
     }
 
-
     @GetMapping("/force-refresh")
-public Map<String, Object> forceRefresh() throws JsonProcessingException {
-    twitchService.forceRefreshNow();
-    return Map.of("status", "forced refresh completed");
-}
+    public Map<String, Object> forceRefresh() throws JsonProcessingException {
+        twitchService.forceRefreshNow();
+        return Map.of("status", "forced refresh completed");
+    }
 
+    @GetMapping("/me")
+    public Map<String, Object> me() {
+        Map<String, Object> profile = twitchService.getUserProfile();
 
+        if (profile == null) {
+            return Map.of("connected", false);
+        }
 
+        String username = (String) profile.get("username");
+        String userId = twitchAppService.getUserId(username);
+
+        return Map.of(
+            "connected", true,
+            "username", username,
+            "userId", userId
+        );
+    }
+
+    @GetMapping("/app-token")
+    public Map<String, Object> getAppToken() {
+        String token = twitchAppService.getAppToken();
+        return Map.of("app_token", token);
+    }
 }

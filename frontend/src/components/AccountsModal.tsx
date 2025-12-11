@@ -1,5 +1,5 @@
 // =======================
-// AccountsModal.tsx (FINAL FIXED VERSION)
+// AccountsModal.tsx (FINAL VERSION WITH EVENTSUB AUTO-REGISTRATION)
 // =======================
 
 import { useState, useEffect } from "react";
@@ -53,6 +53,47 @@ export default function AccountsModal({
     }
   }, [connected]);
 
+  // ======================================================
+  // AUTO-REGISTER TWITCH EVENTSUB
+  // ======================================================
+  useEffect(() => {
+    if (!twitchConnected) return;
+
+    (async () => {
+      try {
+        // 1️⃣ Get Twitch profile from backend
+        const res = await fetch("http://localhost:8080/api/twitch/auth/profile");
+        const twitch = await res.json();
+
+        if (!twitch?.username) {
+          console.warn("❌ Twitch profile missing username");
+          return;
+        }
+
+        // Save username
+        localStorage.setItem("twitch_username", twitch.username);
+
+        // 2️⃣ Determine callback URL
+        const tunnelUrl =
+          localStorage.getItem("tunnel_url") ||
+          "https://dbe1e3451948c8.lhr.life"; // your fallback tunnel
+
+        const callbackUrl = `${tunnelUrl}/api/webhooks/twitch/callback`;
+
+        // 3️⃣ Register EventSub subscription automatically
+        const url =
+          `http://localhost:8080/api/webhooks/twitch/register` +
+          `?username=${twitch.username}&callbackUrl=${callbackUrl}`;
+
+        console.log("📡 Registering Twitch EventSub:", url);
+
+        await fetch(url, { method: "POST" });
+      } catch (err) {
+        console.error("❌ Failed to auto-register EventSub:", err);
+      }
+    })();
+  }, [twitchConnected]);
+
   // Save Pretweet
   const savePretweet = async () => {
     if (!enabled) return;
@@ -100,7 +141,7 @@ export default function AccountsModal({
 
   const disabledUI = !enabled;
 
-  // Disconnect X — UI + backend
+  // Disconnect X
   const disconnectX = async () => {
     await window.api.logout();
     localStorage.removeItem("twitter_profile");
@@ -124,7 +165,7 @@ export default function AccountsModal({
         {/* LEFT SIDE */}
         <div className="w-1/3 p-6 border-r border-white/10 flex flex-col justify-start">
 
-          {/* X PROFILE */}
+          {/* X Profile */}
           <div className="flex flex-col items-center">
             <img src={profilePic} className="w-24 h-24 rounded-full border-4 border-black shadow-lg" />
 
@@ -157,7 +198,7 @@ export default function AccountsModal({
 
           <div className="my-4 border-t border-white/10 w-full"></div>
 
-          {/* TWITCH PROFILE */}
+          {/* TWITCH Profile */}
           <div className="flex flex-col items-center mt-2">
             <img src={twitchPic} className="w-24 h-24 rounded-full border-4 border-purple-700 shadow-lg" />
 
@@ -200,7 +241,7 @@ export default function AccountsModal({
         {/* RIGHT SIDE */}
         <div className="w-2/3 p-6">
 
-          {/* TABS */}
+          {/* Tabs */}
           <div className="flex gap-6 mb-4 border-b border-white/10 pb-3">
             <button onClick={() => setActiveTab("pretweet")} className={activeTab === "pretweet" ? "font-bold" : ""}>Pre-Tweet</button>
             <button onClick={() => setActiveTab("activity")} className={activeTab === "activity" ? "font-bold" : ""}>Activity</button>
@@ -210,7 +251,6 @@ export default function AccountsModal({
           {/* PRE-TWEET TAB */}
           {activeTab === "pretweet" && (
             <div className={disabledUI ? "opacity-40" : ""}>
-
               <h3 className="text-lg font-semibold mb-2">Pre-Tweet Message</h3>
 
               {/* ENABLE SWITCH */}
@@ -228,7 +268,7 @@ export default function AccountsModal({
                 <span>{enabled ? "Enabled" : "Disabled"}</span>
               </label>
 
-              {/* TEXTAREA + EMOJI (relative container) */}
+              {/* TEXTAREA */}
               <div className="relative">
                 <textarea
                   value={pretweet}
@@ -238,7 +278,7 @@ export default function AccountsModal({
                   disabled={disabledUI}
                 />
 
-                {/* counter + emoji button */}
+                {/* Counter + emoji */}
                 <div className="flex justify-between items-center mt-2">
                   <span className="text-gray-400">{pretweet.length}/280</span>
 
@@ -250,7 +290,6 @@ export default function AccountsModal({
                   </button>
                 </div>
 
-                {/* EMOJI POPUP — perfect alignment */}
                 {showEmoji && !disabledUI && (
                   <div className="absolute right-0 top-12 z-[99999] shadow-lg">
                     <EmojiPicker
@@ -264,7 +303,7 @@ export default function AccountsModal({
                 )}
               </div>
 
-              {/* SELECT PLATFORMS BUTTON */}
+              {/* SELECT PLATFORMS */}
               <button
                 className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white"
                 onClick={() => setSelectPlatformsOpen(true)}
@@ -334,11 +373,17 @@ export default function AccountsModal({
             </label>
 
             <div className="flex justify-end gap-3 mt-4">
-              <button onClick={() => setSelectPlatformsOpen(false)} className="px-3 py-2 bg-gray-700 rounded">
+              <button
+                onClick={() => setSelectPlatformsOpen(false)}
+                className="px-3 py-2 bg-gray-700 rounded"
+              >
                 Cancel
               </button>
 
-              <button onClick={() => setSelectPlatformsOpen(false)} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded">
+              <button
+                onClick={() => setSelectPlatformsOpen(false)}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded"
+              >
                 Done
               </button>
             </div>

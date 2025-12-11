@@ -14,6 +14,7 @@ import java.util.Map;
 
 @Service
 public class TwitchService {
+    private final TwitchEventSubService eventSubService;
 
     @Value("${twitch.client-id}")
     private String clientId;
@@ -29,9 +30,10 @@ public class TwitchService {
 
     private Map<String, Object> cachedProfile;
 
-    public TwitchService(TwitchTokenStore tokenStore) {
-        this.tokenStore = tokenStore;
-    }
+ public TwitchService(TwitchTokenStore tokenStore, TwitchEventSubService eventSubService) {
+    this.tokenStore = tokenStore;
+    this.eventSubService = eventSubService;
+}
 
     // --------------------------------------------------------
     // Generate Twitch Login URL
@@ -71,7 +73,21 @@ public class TwitchService {
         // 🔐 Save encrypted tokens + expiry in SQLite
         tokenStore.save(accessToken, refreshToken, expiresAt);
 
+        
         cachedProfile = null;
+
+        // Auto register EventSub for this user
+Map<String, Object> profile = getUserProfile();
+String username = (String) profile.get("username");
+
+// Get user ID from Helix
+String userId = fetchUserId(username);
+
+// Register stream.online event
+eventSubService.registerStreamOnlineEvent(userId);
+
+
+
     }
 
     // --------------------------------------------------------
@@ -225,10 +241,27 @@ public void forceRefreshNow() {
     System.out.println("✔ Refresh complete — new access token saved.");
 }
 
+
+public String fetchUserId(String username) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setBearerAuth(tokenStore.getAccessToken());
+    headers.set("Client-Id", clientId);
+
+    HttpEntity<?> entity = new HttpEntity<>(headers);
+
+    String url = "https://api.twitch.tv/helix/users?login=" + username;
+
+    Map<String, Object> response = rest.exchange(
+            url,
+            HttpMethod.GET,
+            entity,
+            Map.class
+    ).getBody();
+
+    Map<String, Object> user = ((List<Map<String, Object>>) response.get("data")).get(0);
+    return (String) user.get("id");
+}
+
   
-
-
-
-
 
 }

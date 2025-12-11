@@ -86,21 +86,50 @@ public class XService {
         return tokenResponse;
     }
 
-    public String postTweet(String text) {
-        String accessToken = tokenStore.getAccessToken();
-        if (accessToken == null) return "ERROR: Not authenticated with X.";
+  
+public String postTweet(String text) {
+    String accessToken = tokenStore.getAccessToken();
+    if (accessToken == null) return "ERROR: Not authenticated with X.";
 
-        String url = "https://api.twitter.com/2/tweets";
+    // -------------------------------------------------------
+    // 🕒 Generate timestamp (visible in logs)
+    // -------------------------------------------------------
+    String timestamp = java.time.LocalDateTime.now().toString();
+    System.out.println("🕒 Tweet timestamp: " + timestamp);
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(accessToken);
-        headers.setContentType(MediaType.APPLICATION_JSON);
+    // -------------------------------------------------------
+    // 🔥 Invisible uniqueness: add timestamp encoded invisibly
+    //    Use INVISIBLE SEPARATOR (U+2063) + timestamp characters
+    // -------------------------------------------------------
+    String invisibleTimestamp = "\u2063" + timestamp.replaceAll("[^0-9]", "") + "\u2063";
 
-        HttpEntity<?> entity = new HttpEntity<>(Map.of("text", text), headers);
+    // Combine user text + invisible uniqueness
+    String uniqueText = text + invisibleTimestamp;
 
+    String url = "https://api.twitter.com/2/tweets";
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setBearerAuth(accessToken);
+    headers.setContentType(MediaType.APPLICATION_JSON);
+
+    HttpEntity<?> entity = new HttpEntity<>(Map.of("text", uniqueText), headers);
+
+    try {
+        System.out.println("🚀 Sending Tweet: " + text);
         return restTemplate.exchange(url, HttpMethod.POST, entity, String.class)
                 .getBody();
+    } catch (HttpClientErrorException e) {
+        System.out.println("❌ Tweet failed: " + e.getResponseBodyAsString());
+        throw e;
     }
+}
+
+
+
+
+
+
+
 
     public void clearToken() {
         tokenStore.clear();
