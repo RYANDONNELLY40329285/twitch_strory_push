@@ -1,9 +1,10 @@
 // =======================
-// AccountsModal.tsx (AUTO-SAVE PRETWEET VERSION)
+// AccountsModal.tsx (AUTO-SAVE PRETWEET VERSION - FINAL)
 // =======================
 
 import { useState, useEffect } from "react";
 import EmojiPicker from "emoji-picker-react";
+import ActivityPanel from "./ActivityPanel";
 
 export default function AccountsModal({
   connected,
@@ -13,7 +14,7 @@ export default function AccountsModal({
   onClose,
   refreshStatus,
 }: any) {
-  const [activeTab, setActiveTab] = useState("pretweet");
+  const [activeTab, setActiveTab] = useState<"pretweet" | "activity" | "settings">("pretweet");
   const [pretweet, setPretweet] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
 
@@ -93,32 +94,29 @@ export default function AccountsModal({
   // ======================================================
   // AUTO-SAVE PRETWEET (DEBOUNCED)
   // ======================================================
-const persistPretweet = async () => {
-  if (!twitchConnected) return; // cannot save without auth context
+  const persistPretweet = async () => {
+    if (!twitchConnected) return;
 
-  try {
-    setAutoSaveStatus("saving");
+    try {
+      setAutoSaveStatus("saving");
 
-    await window.api.pretweetSave({
-      text: pretweet,                       // allow empty
-      platforms: JSON.stringify(platforms), // allow []
-      enabled: enabled && platforms.length > 0,
-    });
+      await window.api.pretweetSave({
+        text: pretweet,
+        platforms: JSON.stringify(platforms),
+        enabled: enabled && platforms.length > 0,
+      });
 
-    setAutoSaveStatus("saved");
-    setTimeout(() => setAutoSaveStatus("idle"), 1500);
-  } catch {
-    setAutoSaveStatus("error");
-  }
-};
+      setAutoSaveStatus("saved");
+      setTimeout(() => setAutoSaveStatus("idle"), 1500);
+    } catch {
+      setAutoSaveStatus("error");
+    }
+  };
 
   useEffect(() => {
-    if (!twitchConnected || !enabled) return;
+    if (!twitchConnected) return;
 
-    const timeout = setTimeout(() => {
-      persistPretweet();
-    }, 700);
-
+    const timeout = setTimeout(persistPretweet, 700);
     return () => clearTimeout(timeout);
   }, [pretweet, platforms, enabled, twitchConnected]);
 
@@ -181,15 +179,11 @@ const persistPretweet = async () => {
 
         {/* LEFT SIDE */}
         <div className="w-1/3 p-6 border-r border-white/10 flex flex-col">
-
-          {/* X PROFILE */}
           <div className="flex flex-col items-center">
             <img src={profilePic} className="w-24 h-24 rounded-full border-4 border-black" />
-
             <h2 className="mt-3 text-xl font-bold">
               {connected ? profile?.name : "Not Connected"}
             </h2>
-
             <p className="text-gray-300 text-sm mb-3">
               {connected ? "@" + profile?.username : "X account not linked"}
             </p>
@@ -211,12 +205,10 @@ const persistPretweet = async () => {
             )}
           </div>
 
-          <div className="my-4 border-t border-white/10"></div>
+          <div className="my-4 border-t border-white/10" />
 
-          {/* TWITCH PROFILE */}
           <div className="flex flex-col items-center">
             <img src={twitchPic} className="w-24 h-24 rounded-full border-4 border-purple-700" />
-
             <h2 className="mt-3 text-lg font-bold text-purple-300">
               {twitchConnected
                 ? twitchProfile.display_name || twitchProfile.name
@@ -256,27 +248,32 @@ const persistPretweet = async () => {
 
           {/* TABS */}
           <div className="flex gap-6 mb-4 border-b border-white/10 pb-3">
-            <button onClick={() => setActiveTab("pretweet")} className={activeTab === "pretweet" ? "font-bold" : ""}>Pre-Tweet</button>
-            <button onClick={() => setActiveTab("activity")} className={activeTab === "activity" ? "font-bold" : ""}>Activity</button>
-            <button onClick={() => setActiveTab("settings")} className={activeTab === "settings" ? "font-bold" : ""}>Settings</button>
+            <button onClick={() => setActiveTab("pretweet")} className={activeTab === "pretweet" ? "font-bold" : ""}>
+              Pre-Tweet
+            </button>
+            <button onClick={() => setActiveTab("activity")} className={activeTab === "activity" ? "font-bold" : ""}>
+              Activity
+            </button>
+            <button onClick={() => setActiveTab("settings")} className={activeTab === "settings" ? "font-bold" : ""}>
+              Settings
+            </button>
           </div>
 
+          {/* PRE-TWEET TAB */}
           {activeTab === "pretweet" && (
             <div className={disabledUI ? "opacity-40" : ""}>
               <h3 className="text-lg font-semibold mb-2">Pre-Tweet Message</h3>
 
-              {/* ENABLE TOGGLE */}
               <label className="flex items-center gap-3 mb-4 cursor-pointer">
                 <div
                   onClick={toggleEnabled}
                   className={`w-12 h-6 rounded-full ${enabled ? "bg-blue-600" : "bg-gray-600"}`}
                 >
-                  <div className={`w-6 h-6 bg-white rounded-full ${enabled ? "translate-x-6" : ""}`}></div>
+                  <div className={`w-6 h-6 bg-white rounded-full ${enabled ? "translate-x-6" : ""}`} />
                 </div>
                 <span>{enabled ? "Enabled" : "Disabled"}</span>
               </label>
 
-              {/* TEXTAREA */}
               <div className="relative">
                 <textarea
                   value={pretweet}
@@ -319,6 +316,13 @@ const persistPretweet = async () => {
               <p className="text-sm text-gray-400 mt-2">
                 Selected: {platforms.join(", ") || "None"}
               </p>
+            </div>
+          )}
+
+          {/* ACTIVITY TAB */}
+          {activeTab === "activity" && (
+            <div className="h-[420px]">
+              <ActivityPanel />
             </div>
           )}
         </div>
