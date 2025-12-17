@@ -55,40 +55,75 @@ public XService(XTokenStore tokenStore, TweetHistoryStore tweetHistoryStore) {
                 + "&code_challenge_method=plain";
     }
 
-    public Map<String, Object> getAccessToken(String code)
-            throws HttpClientErrorException, JsonProcessingException {
+ public Map<String, Object> getAccessToken(String code)
+        throws HttpClientErrorException, JsonProcessingException {
 
-        String url = "https://api.twitter.com/2/oauth2/token";
+    String url = "https://api.twitter.com/2/oauth2/token";
 
-        String basic = clientId + ":" + clientSecret;
-        String base64Creds = Base64.getEncoder().encodeToString(
-                basic.getBytes(StandardCharsets.UTF_8)
+    String basic = clientId + ":" + clientSecret;
+    String base64Creds = Base64.getEncoder().encodeToString(
+            basic.getBytes(StandardCharsets.UTF_8)
+    );
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+    headers.set("Authorization", "Basic " + base64Creds);
+
+    String body =
+            "grant_type=authorization_code" +
+            "&code=" + code +
+            "&redirect_uri=" + redirectUri +
+            "&include_granted_scopes=true" +
+            "&code_verifier=challenge";
+
+    HttpEntity<String> entity = new HttpEntity<>(body, headers);
+
+    ResponseEntity<Map> response =
+            restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
+
+    Map<String, Object> tokenResponse = response.getBody();
+
+    if (tokenResponse == null || !tokenResponse.containsKey("access_token")) {
+        throw new RuntimeException("No access token returned from X");
+    }
+
+    // ======================================================
+    // 1️⃣ SAVE ACCESS TOKEN
+    // ======================================================
+    String accessToken = tokenResponse.get("access_token").toString();
+    tokenStore.saveAccessToken(accessToken);
+
+    // ======================================================
+    // 2️⃣ FETCH USER PROFILE (USERNAME)
+    // ======================================================
+    HttpHeaders profileHeaders = new HttpHeaders();
+    profileHeaders.setBearerAuth(accessToken);
+
+    ResponseEntity<Map> profileResponse =
+        restTemplate.exchange(
+            "https://api.twitter.com/2/users/me",
+            HttpMethod.GET,
+            new HttpEntity<>(profileHeaders),
+            Map.class
         );
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        headers.set("Authorization", "Basic " + base64Creds);
+    Map<?, ?> bodyMap = profileResponse.getBody();
+    if (bodyMap != null && bodyMap.containsKey("data")) {
+        Map<?, ?> data = (Map<?, ?>) bodyMap.get("data");
+        String username = data.get("username").toString();
 
-        String body =
-                "grant_type=authorization_code" +
-                "&code=" + code +
-                "&redirect_uri=" + redirectUri +
-                "&include_granted_scopes=true" +
-                "&code_verifier=challenge";
+        // ======================================================
+        // 3️⃣ SAVE USERNAME
+        // ======================================================
+        tokenStore.saveUsername(username);
 
-        HttpEntity<String> entity = new HttpEntity<>(body, headers);
-
-        ResponseEntity<Map> response =
-                restTemplate.exchange(url, HttpMethod.POST, entity, Map.class);
-
-        Map<String, Object> tokenResponse = response.getBody();
-
-        if (tokenResponse != null && tokenResponse.containsKey("access_token")) {
-            tokenStore.save(tokenResponse.get("access_token").toString());
-        }
-
-        return tokenResponse;
+        System.out.println("✅ X username saved: @" + username);
     }
+
+    return tokenResponse;
+}
+
+
 
   
 
@@ -97,6 +132,7 @@ public XService(XTokenStore tokenStore, TweetHistoryStore tweetHistoryStore) {
 
     if (accessToken == null) {
         tweetHistoryStore.save(
+                       tokenStore.getUsername(),
             "X",
             text,
             null,
@@ -135,6 +171,7 @@ public XService(XTokenStore tokenStore, TweetHistoryStore tweetHistoryStore) {
                 restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
 
             tweetHistoryStore.save(
+                    tokenStore.getUsername(),
                 "X",
                 text,
                 uniqueText,
@@ -152,6 +189,7 @@ public XService(XTokenStore tokenStore, TweetHistoryStore tweetHistoryStore) {
             // ----------- RATE LIMIT (429) -----------
             if (status == 429) {
                 tweetHistoryStore.save(
+                               tokenStore.getUsername(),
                     "X",
                     text,
                     uniqueText,
@@ -172,6 +210,7 @@ public XService(XTokenStore tokenStore, TweetHistoryStore tweetHistoryStore) {
 
             // ----------- OTHER CLIENT ERRORS -----------
             tweetHistoryStore.save(
+                           tokenStore.getUsername(),
                 "X",
                 text,
                 uniqueText,
@@ -186,6 +225,7 @@ public XService(XTokenStore tokenStore, TweetHistoryStore tweetHistoryStore) {
         }
         catch (Exception e) {
             tweetHistoryStore.save(
+                           tokenStore.getUsername(),
                 "X",
                 text,
                 uniqueText,
@@ -202,6 +242,7 @@ public XService(XTokenStore tokenStore, TweetHistoryStore tweetHistoryStore) {
 
     // Should only reach here if all retries exhausted
     tweetHistoryStore.save(
+                   tokenStore.getUsername(),
         "X",
         text,
         uniqueText,
@@ -245,4 +286,12 @@ private String extractTweetId(String responseBody) {
                 "message", "Authenticated with X. User identity is not available on Free Tier."
         );
     }
+
+
+    public void setUsername(String username) {
+    tokenStore.saveUsername(username);
+}
+
+
+
 }

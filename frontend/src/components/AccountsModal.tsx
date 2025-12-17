@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import EmojiPicker from "emoji-picker-react";
 import ActivityPanel from "./ActivityPanel";
 
+
 export default function AccountsModal({
   connected,
   profile,
@@ -17,6 +18,7 @@ export default function AccountsModal({
   const [activeTab, setActiveTab] = useState<"pretweet" | "activity" | "settings">("pretweet");
   const [pretweet, setPretweet] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
+  const [activityRefreshKey, setActivityRefreshKey] = useState(0);
 
   const [enabled, setEnabled] = useState(true);
   const [platforms, setPlatforms] = useState<string[]>([]);
@@ -90,6 +92,26 @@ export default function AccountsModal({
       }
     })();
   }, [twitchConnected]);
+
+// ======================================================
+// SEND X USERNAME TO BACKEND (ON CONNECT)
+// ======================================================
+useEffect(() => {
+  if (!connected || !profile?.username) return;
+
+  fetch("http://localhost:8080/api/x/auth/username", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: profile.username,
+    }),
+  }).catch(() => {
+    // silent fail — not critical
+  });
+    setActivityRefreshKey((k) => k + 1);
+}, [connected, profile?.username]);
+
+
 
   // ======================================================
   // AUTO-SAVE PRETWEET (DEBOUNCED)
@@ -169,7 +191,7 @@ export default function AccountsModal({
       platforms: JSON.stringify(updatedPlatforms),
       enabled,
     });
-
+    setActivityRefreshKey((k) => k + 1); 
     await refreshStatus();
   };
 
@@ -345,7 +367,7 @@ export default function AccountsModal({
           {/* ACTIVITY TAB */}
           {activeTab === "activity" && (
             <div className="h-[420px]">
-              <ActivityPanel />
+       <ActivityPanel refreshKey={activityRefreshKey} />
             </div>
           )}
         </div>

@@ -12,7 +12,7 @@ type TweetHistoryItem = {
 const PAGE_SIZE = 20;
 const REFRESH_INTERVAL = 15000; // 15 seconds
 
-export default function ActivityPanel() {
+export default function ActivityPanel({ refreshKey }: { refreshKey: number }) {
   const [items, setItems] = useState<TweetHistoryItem[]>([]);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -43,9 +43,10 @@ export default function ActivityPanel() {
   };
 
   // Initial load
-  useEffect(() => {
-    fetchPage(0, true);
-  }, []);
+useEffect(() => {
+  setPage(0);
+  fetchPage(0, true);
+}, [refreshKey]);
 
   // Auto-refresh newest page every 15s
   useEffect(() => {

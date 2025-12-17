@@ -1,5 +1,6 @@
 package com.ryan.socialbackend.controllers;
 
+import com.ryan.socialbackend.security.XTokenStore;
 import com.ryan.socialbackend.services.XService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,9 +15,12 @@ public class XAuthController {
 
     private final XService xService;
 
-    public XAuthController(XService xService) {
-        this.xService = xService;
-    }
+    private final XTokenStore tokenStore;
+
+public XAuthController(XService xService, XTokenStore tokenStore) {
+    this.xService = xService;
+    this.tokenStore = tokenStore;
+}
 
     @GetMapping("/login")
     public Map<String, String> login() {
@@ -70,4 +74,19 @@ public class XAuthController {
     public Map<String, Object> status() {
         return Map.of("connected", xService.getStoredToken() != null);
     }
+
+
+
+
+
+@PostMapping("/username")
+public void setUsername(@RequestBody Map<String, String> body) {
+    String username = body.get("username");
+    if (username != null && !username.isBlank()) {
+        tokenStore.saveUsername(username);
+    }
+}
+
+
+
 }
