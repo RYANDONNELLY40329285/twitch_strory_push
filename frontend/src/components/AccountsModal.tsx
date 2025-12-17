@@ -283,6 +283,39 @@ export default function AccountsModal({
                   disabled={disabledUI}
                 />
 
+                 {/* Emoji toggle */}
+              {/* Emoji button INSIDE textarea */}
+  <button
+    type="button"
+    onClick={() => setShowEmoji((v) => !v)}
+    disabled={disabledUI}
+    className="
+      absolute
+      bottom-2
+      right-3
+      text-xl
+      opacity-60
+      hover:opacity-100
+      transition
+    "
+  >
+    😀
+  </button>
+
+    {showEmoji && !disabledUI && (
+    <div className="absolute right-0 top-full mt-2 z-[99999]">
+      <EmojiPicker
+        theme="dark"
+        onEmojiClick={(e) => {
+          setPretweet((prev) => prev + e.emoji);
+          setShowEmoji(false);
+        }}
+      />
+    </div>
+  )}
+</div>
+
+
                 <div className="flex justify-between items-center mt-2">
                   <span className="text-gray-400">{pretweet.length}/280</span>
                   <span className="text-sm text-gray-400">
@@ -292,18 +325,8 @@ export default function AccountsModal({
                   </span>
                 </div>
 
-                {showEmoji && !disabledUI && (
-                  <div className="absolute right-0 top-12 z-[99999]">
-                    <EmojiPicker
-                      theme="dark"
-                      onEmojiClick={(e) => {
-                        setPretweet((prev) => prev + e.emoji);
-                        setShowEmoji(false);
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
+
+
 
               <button
                 className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded"
