@@ -5,7 +5,8 @@
 import { useState, useEffect } from "react";
 import EmojiPicker from "emoji-picker-react";
 import ActivityPanel from "./ActivityPanel";
-
+import SettingsPanel from "./SettingsPanel";
+import type { Theme } from "../types/theme";
 
 export default function AccountsModal({
   connected,
@@ -24,6 +25,8 @@ export default function AccountsModal({
   const [platforms, setPlatforms] = useState<string[]>([]);
   const [selectPlatformsOpen, setSelectPlatformsOpen] = useState(false);
   const [toggleLock, setToggleLock] = useState(false);
+
+  const [themeLoaded, setThemeLoaded] = useState(false);
 
   const [autoSaveStatus, setAutoSaveStatus] =
     useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -195,9 +198,71 @@ useEffect(() => {
     await refreshStatus();
   };
 
+
+
+ const [theme, setTheme] = useState<Theme>("default");
+const [customColor, setCustomColor] = useState("#7c1027");
+
+
+
+
+useEffect(() => {
+  if (!connected) return;
+
+  fetch("http://localhost:8080/api/user/theme")
+    .then(res => res.json())
+    .then(data => {
+      if (data?.theme) {
+        setTheme(data.theme);
+        if (data.customColor) {
+          setCustomColor(data.customColor);
+        }
+      }
+      setThemeLoaded(true); 
+    })
+    .catch(() => {});
+}, [connected]);
+
+
+useEffect(() => {
+  if (!connected || !themeLoaded) return;
+
+  fetch("http://localhost:8080/api/user/theme", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      theme,
+      customColor,
+    }),
+  }).catch(() => {});
+}, [theme, customColor, connected, themeLoaded]);
+
+
+
+
+
+
+const modalThemeStyle =
+  theme === "custom"
+    ? { background: `linear-gradient(135deg, ${customColor}, #00000080)` }
+    : undefined;
+
+const modalThemeClass =
+  theme === "green"
+    ? "bg-gradient-to-br from-green-600 to-emerald-700"
+    : theme === "purple"
+    ? "bg-gradient-to-br from-purple-600 to-fuchsia-700"
+    : "crimson-card";
+
   return (
     <div className="fixed inset-0 flex items-center justify-center modal-backdrop z-50">
-      <div className="crimson-card w-[900px] h-[540px] rounded-2xl shadow-xl flex overflow-hidden relative">
+
+<div
+  style={modalThemeStyle}
+  className={`${modalThemeClass} w-[900px] h-[540px] rounded-2xl shadow-xl flex overflow-hidden relative`}
+>
+
+
 
         {/* LEFT SIDE */}
         <div className="w-1/3 p-6 border-r border-white/10 flex flex-col">
@@ -370,7 +435,27 @@ useEffect(() => {
        <ActivityPanel refreshKey={activityRefreshKey} />
             </div>
           )}
+
+{/* SETTINGS TAB */}
+{activeTab === "settings" && (
+  <div className="mt-6">
+    <SettingsPanel
+      theme={theme}
+      onThemeChange={setTheme}
+      customColor={customColor}
+      onCustomColorChange={setCustomColor}
+    />
+  </div>
+)}
+
+
+
+
+
+
         </div>
+
+
 
         <button
           className="absolute top-4 right-4 text-xl"
@@ -379,6 +464,10 @@ useEffect(() => {
           ✕
         </button>
       </div>
+
+    
+
+
 
       {/* PLATFORM MODAL */}
       {selectPlatformsOpen && (

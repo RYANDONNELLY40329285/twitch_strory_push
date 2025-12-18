@@ -1,0 +1,1 @@
+export type Theme = "default" | "green" | "purple" | "custom";
