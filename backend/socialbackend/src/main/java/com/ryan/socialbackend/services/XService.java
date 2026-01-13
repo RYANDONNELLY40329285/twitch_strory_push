@@ -130,6 +130,9 @@ public XService(XTokenStore tokenStore, TweetHistoryStore tweetHistoryStore) {
     public String postTweet(String text) {
     String accessToken = tokenStore.getAccessToken();
 
+    
+
+
     if (accessToken == null) {
         tweetHistoryStore.save(
                        tokenStore.getUsername(),
@@ -185,6 +188,28 @@ public XService(XTokenStore tokenStore, TweetHistoryStore tweetHistoryStore) {
         }
         catch (HttpClientErrorException e) {
             int status = e.getStatusCode().value();
+
+          
+            if (status == 401 || status == 403) {
+                System.out.println(" X token expired or revoked — logging out");
+
+                tokenStore.clear(); // auto logout
+
+                tweetHistoryStore.save(
+                        tokenStore.getUsername(),
+                        "X",
+                        text,
+                        uniqueText,
+                        null,
+                        "AUTH_EXPIRED",
+                        e.getResponseBodyAsString(),
+                        attempt
+                );
+
+                return "ERROR: X_AUTH_EXPIRED";
+            }
+
+
 
             // ----------- RATE LIMIT (429) -----------
             if (status == 429) {
@@ -276,6 +301,22 @@ private String extractTweetId(String responseBody) {
         tokenStore.clear();
     }
 
+    private void handleAuthFailure(HttpClientErrorException e) {
+    int status = e.getStatusCode().value();
+
+    if (status == 401 || status == 403) {
+        System.out.println("X access token expired or revoked — logging out");
+
+        tokenStore.clear(); // deletes token + username
+
+        throw new RuntimeException("X_AUTH_EXPIRED");
+    }
+}
+
+
+
+
+
     public Map<String, Object> getUserProfile() {
         if (tokenStore.getAccessToken() == null) {
             return Map.of("connected", false, "error", "Not authenticated");
@@ -290,6 +331,35 @@ private String extractTweetId(String responseBody) {
 
     public void setUsername(String username) {
     tokenStore.saveUsername(username);
+}
+
+public boolean validateStoredToken() {
+    String accessToken = tokenStore.getAccessToken();
+    if (accessToken == null) return false;
+
+    try {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+
+        restTemplate.exchange(
+            "https://api.twitter.com/2/users/me",
+            HttpMethod.GET,
+            new HttpEntity<>(headers),
+            Map.class
+        );
+
+        return true; // token still valid
+    } catch (HttpClientErrorException e) {
+        int status = e.getStatusCode().value();
+
+        if (status == 401 || status == 403) {
+            System.out.println("Stored X token invalid on startup — clearing");
+            tokenStore.clear();
+            return false;
+        }
+
+        throw e; // other errors are real problems
+    }
 }
 
 
