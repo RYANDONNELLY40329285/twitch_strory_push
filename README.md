@@ -1,3 +1,204 @@
+📦 Twitch & X Automation Desktop App
+
+Full-stack Desktop Application (Electron + Spring Boot + SQLite)
+
+🔗 Tech Stack
+
+Backend: Java 17, Spring Boot
+
+Frontend: Electron + React + TypeScript
+
+Database: SQLite
+
+Scripting: Ruby (data export & automation)
+
+APIs: Twitch EventSub, X (Twitter) OAuth 2.0
+
+Architecture: Event-driven, service-oriented
+
+🧠 Project Overview
+
+I built a desktop automation tool that integrates Twitch and X (Twitter) to support streamers with automated posting, activity tracking, and analytics.
+
+The app handles OAuth authentication, real-time Twitch EventSub subscriptions, automated social posting, failure recovery, and data export, all wrapped in a secure Electron desktop experience.
+
+⚙️ Backend Architecture & Responsibilities
+🔐 Authentication & Security
+
+Implemented OAuth 2.0 flows for both Twitch and X
+
+Secure token storage using SQLite with encryption
+
+Automatic token invalidation and logout handling
+
+Startup validation to detect expired or invalid tokens
+
+Key classes
+
+TwitchAuthController
+
+XAuthController
+
+TwitchTokenStore
+
+XTokenStore
+
+EncryptionService
+
+📡 Event-Driven Twitch Integration
+
+Integrated Twitch EventSub to react to real-time stream events
+
+Automatic subscription registration on startup
+
+Safe cleanup and re-registration logic
+
+Local tunnel support for webhook callbacks
+
+Events handled
+
+Stream online/offline
+
+Subscription lifecycle events
+
+🤖 Automation & Business Logic
+
+Built an AutoPostService that:
+
+Detects stream-online events
+
+Automatically posts to X
+
+Applies retry logic and failure handling
+
+Implemented rate-limit awareness and failure classification:
+
+SUCCESS
+
+FAILED
+
+RATE_LIMITED
+
+AUTH_EXPIRED
+
+🗃️ Persistence & Data Modelling
+
+Designed SQLite schemas for:
+
+Tokens
+
+Tweet history
+
+Pretweets
+
+Implemented user-scoped data access to ensure isolation
+
+Added safe schema migrations on startup
+
+Tweet history includes
+
+Original text
+
+Posted text
+
+Status
+
+Error messages
+
+Retry count
+
+Timestamp
+
+📤 Export & Automation via Ruby
+
+Integrated Ruby scripting into the Java backend to:
+
+Export tweet history to .xlsx
+
+Apply conditional formatting (success, failure, rate-limited)
+
+Preserve numeric tweet IDs safely
+
+Triggered securely via backend controller
+
+Executed from Electron using IPC
+
+Auto-opened exported files on completion
+
+Why Ruby?
+
+Excellent Excel tooling
+
+Clear separation between backend logic and reporting
+
+Demonstrates polyglot engineering
+
+🖥️ Electron Desktop Integration
+
+Built secure IPC bridges between Electron and backend
+
+Disabled Node integration in renderer for security
+
+Used preload scripts for controlled API access
+
+Allowed users to:
+
+Trigger exports
+
+View activity history
+
+Authenticate services
+
+Receive real-time feedback
+
+📊 UI & User Experience
+
+Live activity feed with polling + refresh logic
+
+Status-aware styling (success / failure / rate-limited)
+
+Auto-closing notifications for exports
+
+Pagination and performance-safe history loading
+
+🧪 Reliability & Production Considerations
+
+Defensive error handling across API boundaries
+
+Clear separation of concerns:
+
+Controllers
+
+Services
+
+Stores
+
+Startup health checks
+
+Safe background process execution
+
+User-scoped access control enforced at store level
+
+🏁 Key Engineering Takeaways
+
+Built a real event-driven system, not just CRUD
+
+Integrated multiple external APIs safely
+
+Balanced desktop, backend, and automation concerns
+
+Demonstrated production-style thinking:
+
+retries
+
+failure modes
+
+observability
+
+export tooling
+
+
+
 "# twitch_strory_push" 
 
 
