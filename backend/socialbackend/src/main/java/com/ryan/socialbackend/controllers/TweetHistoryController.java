@@ -1,8 +1,15 @@
 package com.ryan.socialbackend.controllers;
 
 import com.ryan.socialbackend.security.TweetHistoryStore;
+
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
 import com.ryan.socialbackend.security.XTokenStore;
+
+
+
 
 import java.util.List;
 import java.util.Map;
@@ -37,5 +44,27 @@ public List<Map<String, Object>> history(
 
     return tweetHistoryStore.getHistoryForUser(username, limit, offset);
 }
+
+    @GetMapping("/history/me")
+    public List<Map<String, Object>> getMyTweetHistory(
+            @RequestParam(defaultValue = "1000") int limit,
+            @RequestParam(defaultValue = "0") int offset
+    ) {
+        String username = tokenStore.getUsername();
+
+        if (username == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Not authenticated with X"
+            );
+        }
+
+        return tweetHistoryStore.getHistory(username, limit, offset);
+    }
+
+
+
+
+
 
 }

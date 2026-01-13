@@ -160,11 +160,17 @@ public class TweetHistoryStore {
 
 
 
-    public List<Map<String, Object>> getHistory(int limit, int offset) {
+
+public List<Map<String, Object>> getHistory(
+        String username,
+        int limit,
+        int offset
+) {
     try (Connection conn = DriverManager.getConnection(DB_URL)) {
 
         PreparedStatement ps = conn.prepareStatement("""
             SELECT id,
+                   username,
                    platform,
                    text,
                    sent_text,
@@ -174,20 +180,22 @@ public class TweetHistoryStore {
                    attempt_count,
                    created_at
             FROM tweet_history
+            WHERE username = ?
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
         """);
 
-        ps.setInt(1, limit);
-        ps.setInt(2, offset);
+        ps.setString(1, username);
+        ps.setInt(2, limit);
+        ps.setInt(3, offset);
 
         ResultSet rs = ps.executeQuery();
         List<Map<String, Object>> results = new ArrayList<>();
 
         while (rs.next()) {
             Map<String, Object> row = new HashMap<>();
-
             row.put("id", rs.getLong("id"));
+            row.put("username", rs.getString("username"));
             row.put("platform", rs.getString("platform"));
             row.put("text", rs.getString("text"));
             row.put("sentText", rs.getString("sent_text"));
@@ -196,16 +204,18 @@ public class TweetHistoryStore {
             row.put("errorMessage", rs.getString("error_message"));
             row.put("attemptCount", rs.getInt("attempt_count"));
             row.put("createdAt", rs.getLong("created_at"));
-
             results.add(row);
         }
 
         return results;
-
     } catch (SQLException e) {
-        throw new RuntimeException("Failed to load tweet history", e);
+        throw new RuntimeException(e);
     }
 }
+ 
+
+
+
 
 
 
