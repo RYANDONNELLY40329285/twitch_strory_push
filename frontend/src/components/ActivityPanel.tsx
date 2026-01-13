@@ -88,6 +88,17 @@ export default function ActivityPanel({ refreshKey }: { refreshKey: number }) {
     };
   }, []);
 
+  useEffect(() => {
+  if (!exportMessage) return;
+
+  const timer = setTimeout(() => {
+    setExportMessage(null);
+    setExportStatus(null);
+  }, 4000); // ⏱ 4 seconds
+
+  return () => clearTimeout(timer);
+}, [exportMessage]);
+
   return (
     <div className="h-full flex flex-col">
       {/* Export button */}
