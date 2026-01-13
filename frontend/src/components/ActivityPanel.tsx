@@ -10,13 +10,19 @@ type TweetHistoryItem = {
 };
 
 const PAGE_SIZE = 20;
-const REFRESH_INTERVAL = 15000; // 15 seconds
+const REFRESH_INTERVAL = 15000;
 
 export default function ActivityPanel({ refreshKey }: { refreshKey: number }) {
   const [items, setItems] = useState<TweetHistoryItem[]>([]);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+
+  // EXPORT STATE (INSIDE COMPONENT)
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] =
+    useState<"success" | "error" | null>(null);
 
   const refreshTimer = useRef<number | null>(null);
 
@@ -25,16 +31,15 @@ export default function ActivityPanel({ refreshKey }: { refreshKey: number }) {
 
     try {
       const res = await fetch(
-        `http://localhost:8080/api/tweets/history?limit=${PAGE_SIZE}&offset=${pageIndex * PAGE_SIZE}`
+        `http://localhost:8080/api/tweets/history?limit=${PAGE_SIZE}&offset=${
+          pageIndex * PAGE_SIZE
+        }`
       );
 
       const data: TweetHistoryItem[] = await res.json();
-
       setHasMore(data.length === PAGE_SIZE);
 
-      setItems((prev) =>
-        replace ? data : [...prev, ...data]
-      );
+      setItems((prev) => (replace ? data : [...prev, ...data]));
     } catch (err) {
       console.error("Failed to load activity", err);
     } finally {
@@ -42,13 +47,35 @@ export default function ActivityPanel({ refreshKey }: { refreshKey: number }) {
     }
   };
 
-  // Initial load
-useEffect(() => {
-  setPage(0);
-  fetchPage(0, true);
-}, [refreshKey]);
+  //  EXPORT HANDLER
+  const runExport = async () => {
+    setExporting(true);
 
-  // Auto-refresh newest page every 15s
+  try {
+    const result = await (window as any).api.exportTweetHistory();
+
+    if (!result.success) {
+      throw new Error(result.message);
+    }
+
+    setExportStatus("success");
+    setExportMessage("Export completed successfully");
+
+  } catch (err: any) {
+    setExportStatus("error");
+    setExportMessage(err.message || "Export failed");
+  } finally {
+    setExporting(false);
+  }
+  };
+
+  // Initial load
+  useEffect(() => {
+    setPage(0);
+    fetchPage(0, true);
+  }, [refreshKey]);
+
+  // Auto-refresh
   useEffect(() => {
     refreshTimer.current = window.setInterval(() => {
       fetchPage(0, true);
@@ -63,9 +90,22 @@ useEffect(() => {
 
   return (
     <div className="h-full flex flex-col">
+      {/* Export button */}
+      <div className="flex items-center gap-3 mb-3">
+        <button
+          onClick={runExport}
+          disabled={exporting}
+          className="px-4 py-2 rounded text-sm font-medium
+                     bg-[#5865f2] hover:bg-[#4752c4]
+                     disabled:opacity-50"
+        >
+          {exporting ? "Exporting…" : "Export to Excel"}
+        </button>
+      </div>
+
       <div className="flex-1 overflow-y-auto pr-2">
         <table className="w-full text-sm border-separate border-spacing-y-2">
-          <thead className="sticky top-0 bg-transparent text-gray-400">
+          <thead className="sticky top-0 text-gray-400">
             <tr>
               <th className="text-left px-3 py-2">Time</th>
               <th className="text-left px-3 py-2">Message</th>
@@ -80,11 +120,11 @@ useEffect(() => {
                 key={item.id}
                 className="bg-[#2b2d31] hover:bg-[#313338] transition rounded-lg"
               >
-                <td className="px-3 py-3 text-gray-400 whitespace-nowrap">
+                <td className="px-3 py-3 text-gray-400">
                   {new Date(item.createdAt).toLocaleTimeString()}
                 </td>
 
-                <td className="px-3 py-3 max-w-[360px] truncate">
+                <td className="px-3 py-3 truncate max-w-[360px]">
                   {item.text}
                 </td>
 
@@ -107,12 +147,6 @@ useEffect(() => {
             ))}
           </tbody>
         </table>
-
-        {!loading && items.length === 0 && (
-          <p className="text-gray-400 text-center mt-6">
-            No activity yet
-          </p>
-        )}
       </div>
 
       {/* Load more */}
@@ -128,6 +162,19 @@ useEffect(() => {
         >
           {loading ? "Loading…" : "Load more"}
         </button>
+      )}
+
+      {/* XPORT STATUS POPUP */}
+      {exportMessage && (
+        <div
+          className={`fixed bottom-6 right-6 px-4 py-3 rounded shadow-lg text-sm ${
+            exportStatus === "success"
+              ? "bg-green-600 text-white"
+              : "bg-red-600 text-white"
+          }`}
+        >
+          {exportMessage}
+        </div>
       )}
     </div>
   );

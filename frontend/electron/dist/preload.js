@@ -5,6 +5,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 electron_1.contextBridge.exposeInMainWorld("api", {
+    exportTweetHistory: () => electron_1.ipcRenderer.invoke("export:tweet-history"),
     // -----------------------------------------
     // TWITTER / X
     // -----------------------------------------

@@ -3,6 +3,13 @@ require 'json'
 require 'time'
 require 'write_xlsx'
 
+output_path = ARGV[0]
+
+if output_path.nil? || output_path.strip.empty?
+  puts "No output path provided"
+  exit 1
+end
+
 # ================================
 # Fetch tweet history (logged-in user)
 # ================================
@@ -13,7 +20,7 @@ tweets = JSON.parse(response)
 # ================================
 # Create workbook & worksheet
 # ================================
-workbook  = WriteXLSX.new('tweet_history.xlsx')
+workbook = WriteXLSX.new(output_path)
 worksheet = workbook.add_worksheet('Tweet History')
 
 # ================================

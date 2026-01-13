@@ -4,7 +4,10 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 
+
 contextBridge.exposeInMainWorld("api", {
+  exportTweetHistory: () =>
+    ipcRenderer.invoke("export:tweet-history"),
   // -----------------------------------------
   // TWITTER / X
   // -----------------------------------------
@@ -15,6 +18,9 @@ contextBridge.exposeInMainWorld("api", {
   logout: () => ipcRenderer.invoke("oauth-logout"),
   onOAuthComplete: (callback: any) =>
     ipcRenderer.on("oauth-complete", callback),
+
+
+
 
   // -----------------------------------------
   // AUTO PROFILE (from DOM scraper)
@@ -46,5 +52,7 @@ pretweetLoad: (): Promise<{
 
 pretweetSetEnabled: (enabled: boolean): Promise<any> =>
   ipcRenderer.invoke("pretweet:setEnabled", enabled),
+
+
 
 });

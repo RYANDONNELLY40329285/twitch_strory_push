@@ -5,6 +5,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path_1 = __importDefault(require("path"));
+const electron_2 = require("electron");
+const child_process_1 = require("child_process");
+const fs_1 = __importDefault(require("fs"));
 const BACKEND_URL = "http://localhost:8080";
 let mainWindow = null;
 function createWindow() {
@@ -278,4 +281,48 @@ electron_1.ipcMain.handle("pretweet:setEnabled", async (_, enabled) => {
         body: JSON.stringify({ enabled }),
     });
     return await res.json();
+});
+electron_1.ipcMain.handle("export:tweet-history", async () => {
+    try {
+        // 1️⃣ Ask user where to save
+        const { canceled, filePath } = await electron_2.dialog.showSaveDialog({
+            title: "Export Tweet History",
+            defaultPath: "tweet_history.xlsx",
+            filters: [
+                { name: "Excel Files", extensions: ["xlsx"] },
+            ],
+        });
+        if (canceled || !filePath) {
+            return { success: false, message: "Export cancelled" };
+        }
+        // 2️⃣ Resolve Ruby script path
+        const scriptPath = path_1.default.resolve(process.cwd(), "..", "backend", "socialbackend", "scripts", "export_tweet_history_xlsx.rb");
+        if (!fs_1.default.existsSync(scriptPath)) {
+            throw new Error("Ruby script not found: " + scriptPath);
+        }
+        // 3️⃣ Run Ruby with output path
+        await new Promise((resolve, reject) => {
+            const proc = (0, child_process_1.spawn)("ruby", [scriptPath, filePath], {
+                cwd: path_1.default.dirname(scriptPath),
+            });
+            let output = "";
+            proc.stdout.on("data", d => (output += d.toString()));
+            proc.stderr.on("data", d => (output += d.toString()));
+            proc.on("close", code => {
+                if (code === 0)
+                    resolve();
+                else
+                    reject(new Error(output));
+            });
+        });
+        await electron_1.shell.openPath(filePath);
+        return {
+            success: true,
+            message: "Export completed and opened",
+            path: filePath,
+        };
+    }
+    catch (err) {
+        return { success: false, message: err.message };
+    }
 });

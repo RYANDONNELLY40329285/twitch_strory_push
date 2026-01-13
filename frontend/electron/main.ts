@@ -1,5 +1,13 @@
-import { app, BrowserWindow, ipcMain, session } from "electron";
+import { app, BrowserWindow, ipcMain, session,   shell} from "electron";
 import path from "path";
+
+
+
+import { dialog } from "electron";
+import { execFile } from "child_process";
+
+import { spawn } from "child_process";
+import fs from "fs";
 
 const BACKEND_URL = "http://localhost:8080";
 
@@ -327,3 +335,63 @@ ipcMain.handle("pretweet:setEnabled", async (_, enabled) => {
   return await res.json();
 });
 
+
+
+ipcMain.handle("export:tweet-history", async () => {
+  try {
+    // 1️⃣ Ask user where to save
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: "Export Tweet History",
+      defaultPath: "tweet_history.xlsx",
+      filters: [
+        { name: "Excel Files", extensions: ["xlsx"] },
+      ],
+    });
+
+    if (canceled || !filePath) {
+      return { success: false, message: "Export cancelled" };
+    }
+
+    // 2️⃣ Resolve Ruby script path
+    const scriptPath = path.resolve(
+      process.cwd(),
+      "..",
+      "backend",
+      "socialbackend",
+      "scripts",
+      "export_tweet_history_xlsx.rb"
+    );
+
+    if (!fs.existsSync(scriptPath)) {
+      throw new Error("Ruby script not found: " + scriptPath);
+    }
+
+    // 3️⃣ Run Ruby with output path
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn("ruby", [scriptPath, filePath], {
+        cwd: path.dirname(scriptPath),
+      });
+
+      let output = "";
+      proc.stdout.on("data", d => (output += d.toString()));
+      proc.stderr.on("data", d => (output += d.toString()));
+
+      proc.on("close", code => {
+        if (code === 0) resolve();
+        else reject(new Error(output));
+      });
+    });
+
+     await shell.openPath(filePath);
+
+    return {
+      success: true,
+      message: "Export completed and opened",
+      path: filePath,
+    };
+
+  } catch (err: any) {
+    return { success: false, message: err.message };
+  }
+
+});
